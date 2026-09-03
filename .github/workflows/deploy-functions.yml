@@ -11,7 +11,6 @@ name: Deploy Supabase Edge Functions
 #
 # Function *secrets* (Flutterwave keys, ALLOWED_ORIGIN, secret hash) are set once
 # via the Supabase CLI and persist across redeploys, so they are not managed here.
-
 on:
   push:
     branches: [main]
