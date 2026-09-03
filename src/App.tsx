@@ -52,6 +52,7 @@ import Shortlists from '@/pages/club/Shortlists'
 import ClubTrials from '@/pages/club/Trials'
 import ClubReports from '@/pages/club/Reports'
 import Staff from '@/pages/club/Staff'
+import ClubVerify from '@/pages/club/Verify'
 import PlayerDetail from '@/pages/club/PlayerDetail'
 
 /* Admin */
@@ -1129,6 +1130,19 @@ export default function App() {
                 <RequireRole role="club">
                   <RequireSubscription>
                     <Staff />
+                  </RequireSubscription>
+                </RequireRole>
+              </RequireAuth>
+            }
+          />
+
+          <Route
+            path="/club/verify"
+            element={
+              <RequireAuth>
+                <RequireRole role="club">
+                  <RequireSubscription>
+                    <ClubVerify />
                   </RequireSubscription>
                 </RequireRole>
               </RequireAuth>
