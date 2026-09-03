@@ -208,7 +208,7 @@ export default function PlayerProfile() {
         bio: form.bio.trim() || null,
         availability: form.availability,
         visibility: form.visibility,
-        contract_expiry: form.contract_expiry || null,
+        contract_expiry: form.contract_expiry || undefined,
       })
 
       toast({
@@ -618,20 +618,21 @@ export default function PlayerProfile() {
                     event.target.value as ProfileForm['visibility'],
                   )
                 }}
-                options={[
-                  {
-                    value: 'public',
-                    label: 'Public — anyone on FutWeb',
-                  },
-                  {
-                    value: 'verified_only',
-                    label: 'Verified clubs only',
-                  },
-                  {
-                    value: 'private',
-                    label: 'Private — invite only',
-                  },
-                ]}
+              options={[
+  {
+    value: 'public',
+    label: 'Public — anyone on FutWeb',
+    disabled: player.is_minor,
+  },
+  {
+    value: 'verified_only',
+    label: 'Verified clubs only',
+  },
+  {
+    value: 'private',
+    label: 'Private — invite only',
+  },
+]}
               />
 
               <div className="mt-3 rounded-xl bg-ink-50 p-3">
