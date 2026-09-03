@@ -1,46 +1,61 @@
-
 import { useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
-import { AppShell } from '@/components/layout/AppShell'
+import { PageHeader } from '@/components/layout/PageHeader'
 import {
+  Badge,
   Button,
   Card,
+  CardHeader,
   Icon,
   ProgressBar,
-  Skeleton,
-  Toaster,
+  Stat,
 } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
 import { usePlayer } from '@/context/PlayerContext'
+import { cn } from '@/lib/utils'
 
-function formatDate(value: string | null | undefined) {
-  if (!value) return '—'
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-
-  return new Intl.DateTimeFormat(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(date)
+type ApplicationRow = {
+  id: string
+  trial_id: string
+  player_id: string
+  message: string | null
+  status: string
+  created_at: string
 }
 
-function getAge(dob: string | null | undefined) {
-  if (!dob) return null
+type MatchStatRow = {
+  id: string
+  season: string
+  competition: string | null
+  appearances: number | null
+  minutes: number | null
+  goals: number | null
+  assists: number | null
+  shots: number | null
+  shots_on_target: number | null
+  yellow_cards: number | null
+  red_cards: number | null
+  clean_sheets: number | null
+}
 
-  const birth = new Date(`${dob}T00:00:00`)
-  if (Number.isNaN(birth.getTime())) return null
+function getAge(dob: string) {
+  const birthDate = new Date(`${dob}T00:00:00`)
+
+  if (Number.isNaN(birthDate.getTime())) return null
 
   const today = new Date()
-  let age = today.getFullYear() - birth.getFullYear()
 
-  const month = today.getMonth() - birth.getMonth()
+  let age = today.getFullYear() - birthDate.getFullYear()
+
+  const monthDifference = today.getMonth() - birthDate.getMonth()
 
   if (
-    month < 0 ||
-    (month === 0 && today.getDate() < birth.getDate())
+    monthDifference < 0 ||
+    (
+      monthDifference === 0 &&
+      today.getDate() < birthDate.getDate()
+    )
   ) {
     age -= 1
   }
@@ -49,642 +64,38 @@ function getAge(dob: string | null | undefined) {
 }
 
 function getInitials(firstName: string, lastName: string) {
-  return `${firstName?.charAt(0) ?? ''}${lastName?.charAt(0) ?? ''}`
-    .trim()
-    .toUpperCase()
+  return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
 }
 
-function getAttributeCount(attributes: Record<string, unknown> | null) {
-  if (!attributes) return 0
+function formatDate(value: string | null | undefined) {
+  if (!value) return '—'
 
-  return Object.values(attributes).filter(
-    (value) => typeof value === 'number'
-  ).length
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) return '—'
+
+  return new Intl.DateTimeFormat(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(date)
 }
 
-export default function PlayerDashboard() {
-  const navigate = useNavigate()
-  const { user } = useAuth()
-  const {
-    player,
-    attributes,
-    stats,
-    career,
-    applications,
-    loading,
-    error,
-    refresh,
-  } = usePlayer()
-
-  const displayName = useMemo(() => {
-    if (!player) return user?.fullName || 'Player'
-
-    return `${player.first_name} ${player.last_name}`.trim()
-  }, [player, user?.fullName])
-
-  const age = useMemo(
-    () => getAge(player?.dob),
-    [player?.dob],
-  )
-
-  const initials = useMemo(() => {
-    if (!player) {
-      const parts = (user?.fullName || 'Player').trim().split(/\s+/)
-
-      return getInitials(
-        parts[0] || 'P',
-        parts.length > 1 ? parts[parts.length - 1] : '',
-      )
-    }
-
-    return getInitials(player.first_name, player.last_name)
-  }, [player, user?.fullName])
-
-  const activeApplications = useMemo(() => {
-    return applications.filter((application) =>
-      ['pending', 'shortlisted', 'accepted'].includes(application.status),
-    )
-  }, [applications])
-
-  const recentStats = useMemo(() => {
-    return [...stats]
-      .sort((a, b) => {
-        const aSeason = String(a.season ?? '')
-        const bSeason = String(b.season ?? '')
-
-        return bSeason.localeCompare(aSeason)
-      })
-      .slice(0, 3)
-  }, [stats])
-
-  const attributeCount = useMemo(
-    () => getAttributeCount(attributes),
-    [attributes],
-  )
-
-  if (loading) {
-    return (
-      <AppShell>
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <Skeleton className="h-8 w-56" />
-            <Skeleton className="h-4 w-80" />
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <Skeleton className="h-36 rounded-2xl" />
-            <Skeleton className="h-36 rounded-2xl" />
-            <Skeleton className="h-36 rounded-2xl" />
-          </div>
-
-          <Skeleton className="h-72 rounded-2xl" />
-        </div>
-      </AppShell>
-    )
-  }
-
-  if (!player) {
-    return (
-      <AppShell>
-        <div className="mx-auto max-w-2xl py-16">
-          <Card className="p-8 text-center">
-            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
-              <Icon name="user" size={28} />
-            </div>
-
-            <h1 className="text-xl font-semibold text-slate-900">
-              Complete your player profile
-            </h1>
-
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Your account is authenticated, but your player profile has not
-              been created yet. Complete onboarding to start building your
-              FutWeb profile.
-            </p>
-
-            {error && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-left text-sm text-red-700">
-                {error}
-              </div>
-            )}
-
-            <div className="mt-6 flex justify-center gap-3">
-              <Button onClick={() => navigate('/onboarding/player')}>
-                Complete onboarding
-              </Button>
-
-              <Button
-                variant="secondary"
-                onClick={() => void refresh()}
-              >
-                Retry
-              </Button>
-            </div>
-          </Card>
-        </div>
-      </AppShell>
-    )
-  }
-
-  return (
-    <AppShell>
-      <Toaster />
-
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div>
-            <p className="text-sm font-medium text-slate-500">
-              Player workspace
-            </p>
-
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
-              Welcome back, {player.first_name}
-            </h1>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Keep your profile current and make it easy for clubs to evaluate
-              you.
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => navigate('/player/profile')}
-            >
-              <Icon name="user" size={16} />
-              Profile
-            </Button>
-
-            <Button onClick={() => navigate('/player/media')}>
-              <Icon name="upload" size={16} />
-              Add media
-            </Button>
-          </div>
-        </div>
-
-        {/* Player summary */}
-        <Card className="overflow-hidden">
-          <div className="p-6">
-            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-slate-900 text-lg font-bold text-white">
-                  {initials}
-                </div>
-
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-xl font-semibold text-slate-900">
-                      {displayName}
-                    </h2>
-
-                    {player.is_minor && (
-                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800">
-                        Minor
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-slate-500">
-                    <span>{player.position_primary}</span>
-
-                    {age !== null && <span>{age} years</span>}
-
-                    {player.nationality && (
-                      <span>{player.nationality}</span>
-                    )}
-
-                    {player.foot && (
-                      <span>
-                        {player.foot === 'both'
-                          ? 'Both feet'
-                          : `${player.foot} foot`}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-xl bg-slate-50 px-4 py-3">
-                  <p className="text-xs text-slate-500">FutWeb score</p>
-                  <p className="mt-1 text-xl font-bold text-slate-900">
-                    {player.futweb_score ?? '—'}
-                  </p>
-                </div>
-
-                <div className="rounded-xl bg-slate-50 px-4 py-3">
-                  <p className="text-xs text-slate-500">Potential</p>
-                  <p className="mt-1 text-xl font-bold text-slate-900">
-                    {player.potential ?? '—'}
-                  </p>
-                </div>
-
-                <div className="rounded-xl bg-slate-50 px-4 py-3">
-                  <p className="text-xs text-slate-500">Attributes</p>
-                  <p className="mt-1 text-xl font-bold text-slate-900">
-                    {attributeCount}
-                  </p>
-                </div>
-
-                <div className="rounded-xl bg-slate-50 px-4 py-3">
-                  <p className="text-xs text-slate-500">Applications</p>
-                  <p className="mt-1 text-xl font-bold text-slate-900">
-                    {activeApplications.length}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-slate-100 bg-slate-50 px-6 py-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2 text-sm">
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    player.visibility === 'public'
-                      ? 'bg-emerald-500'
-                      : player.visibility === 'verified_only'
-                        ? 'bg-amber-500'
-                        : 'bg-slate-400'
-                  }`}
-                />
-
-                <span className="font-medium text-slate-700">
-                  {player.visibility === 'public'
-                    ? 'Public profile'
-                    : player.visibility === 'verified_only'
-                      ? 'Verified clubs only'
-                      : 'Private profile'}
-                </span>
-              </div>
-
-              <Button
-                variant="ghost"
-                onClick={() => navigate('/player/profile')}
-              >
-                Manage visibility
-              </Button>
-            </div>
-          </div>
-        </Card>
-
-        {/* Main dashboard grid */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Profile completeness */}
-          <Card className="p-6 lg:col-span-2">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="font-semibold text-slate-900">
-                  Profile strength
-                </h2>
-
-                <p className="mt-1 text-sm text-slate-500">
-                  Complete your profile to give clubs a stronger picture of
-                  your playing level.
-                </p>
-              </div>
-
-              <Button
-                variant="secondary"
-                onClick={() => navigate('/player/profile')}
-              >
-                Edit
-              </Button>
-            </div>
-
-            <div className="mt-6">
-              <div className="mb-2 flex items-center justify-between text-sm">
-                <span className="font-medium text-slate-700">
-                  Profile completeness
-                </span>
-
-                <span className="font-semibold text-slate-900">
-                  {calculateProfileCompleteness(player)}%
-                </span>
-              </div>
-
-              <ProgressBar
-                value={calculateProfileCompleteness(player)}
-              />
-            </div>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <ProfileCheck
-                label="Personal details"
-                complete={Boolean(
-                  player.first_name &&
-                    player.last_name &&
-                    player.dob &&
-                    player.nationality,
-                )}
-              />
-
-              <ProfileCheck
-                label="Football details"
-                complete={Boolean(
-                  player.position_primary &&
-                    player.foot &&
-                    player.height_cm &&
-                    player.weight_kg,
-                )}
-              />
-
-              <ProfileCheck
-                label="Player bio"
-                complete={Boolean(player.bio)}
-              />
-
-              <ProfileCheck
-                label="Career history"
-                complete={career.length > 0}
-              />
-            </div>
-          </Card>
-
-          {/* Quick actions */}
-          <Card className="p-6">
-            <h2 className="font-semibold text-slate-900">
-              Quick actions
-            </h2>
-
-            <div className="mt-4 space-y-2">
-              <QuickAction
-                icon="user"
-                label="Update profile"
-                onClick={() => navigate('/player/profile')}
-              />
-
-              <QuickAction
-                icon="star"
-                label="Update attributes"
-                onClick={() => navigate('/player/attributes')}
-              />
-
-              <QuickAction
-                icon="bar-chart"
-                label="Log match stats"
-                onClick={() => navigate('/player/stats')}
-              />
-
-              <QuickAction
-                icon="play"
-                label="Manage media"
-                onClick={() => navigate('/player/media')}
-              />
-
-              <QuickAction
-                icon="search"
-                label="Find trials"
-                onClick={() => navigate('/player/trials')}
-              />
-            </div>
-          </Card>
-        </div>
-
-        {/* Football information */}
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="font-semibold text-slate-900">
-                  Playing profile
-                </h2>
-
-                <p className="mt-1 text-sm text-slate-500">
-                  Your core football information.
-                </p>
-              </div>
-
-              <Button
-                variant="ghost"
-                onClick={() => navigate('/player/profile')}
-              >
-                Edit
-              </Button>
-            </div>
-
-            <div className="mt-5 grid grid-cols-2 gap-4">
-              <InfoItem
-                label="Primary position"
-                value={player.position_primary}
-              />
-
-              <InfoItem
-                label="Secondary positions"
-                value={
-                  player.position_secondary?.length
-                    ? player.position_secondary.join(', ')
-                    : 'None added'
-                }
-              />
-
-              <InfoItem
-                label="Preferred foot"
-                value={
-                  player.foot === 'both'
-                    ? 'Both'
-                    : player.foot
-                      ? `${player.foot} foot`
-                      : '—'
-                }
-              />
-
-              <InfoItem
-                label="Height"
-                value={
-                  player.height_cm
-                    ? `${player.height_cm} cm`
-                    : 'Not provided'
-                }
-              />
-
-              <InfoItem
-                label="Weight"
-                value={
-                  player.weight_kg
-                    ? `${player.weight_kg} kg`
-                    : 'Not provided'
-                }
-              />
-
-              <InfoItem
-                label="Availability"
-                value={formatAvailability(player.availability)}
-              />
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="font-semibold text-slate-900">
-                  Recent performance
-                </h2>
-
-                <p className="mt-1 text-sm text-slate-500">
-                  Your latest recorded seasons.
-                </p>
-              </div>
-
-              <Button
-                variant="ghost"
-                onClick={() => navigate('/player/stats')}
-              >
-                View all
-              </Button>
-            </div>
-
-            {recentStats.length === 0 ? (
-              <EmptyState
-                title="No match statistics yet"
-                description="Add your first season statistics to start building your performance history."
-                actionLabel="Add stats"
-                onAction={() => navigate('/player/stats')}
-              />
-            ) : (
-              <div className="mt-5 space-y-3">
-                {recentStats.map((stat) => (
-                  <div
-                    key={stat.id}
-                    className="flex items-center justify-between rounded-xl border border-slate-100 p-4"
-                  >
-                    <div>
-                      <p className="font-medium text-slate-900">
-                        {stat.season}
-                      </p>
-
-                      <p className="mt-1 text-xs text-slate-500">
-                        {stat.competition || 'Competition not specified'}
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-4 text-right">
-                      <StatValue
-                        label="Apps"
-                        value={stat.appearances}
-                      />
-
-                      <StatValue
-                        label="Goals"
-                        value={stat.goals}
-                      />
-
-                      <StatValue
-                        label="Assists"
-                        value={stat.assists}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </div>
-
-        {/* Trial applications */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold text-slate-900">
-                Trial applications
-              </h2>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Keep track of your current recruitment activity.
-              </p>
-            </div>
-
-            <Button
-              variant="secondary"
-              onClick={() => navigate('/player/trials')}
-            >
-              Browse trials
-            </Button>
-          </div>
-
-          {applications.length === 0 ? (
-            <EmptyState
-              title="No applications yet"
-              description="Browse verified club trial opportunities and submit an application."
-              actionLabel="Find trials"
-              onAction={() => navigate('/player/trials')}
-            />
-          ) : (
-            <div className="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {applications.slice(0, 6).map((application) => (
-                <div
-                  key={application.id}
-                  className="rounded-xl border border-slate-100 p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-slate-900">
-                        Trial application
-                      </p>
-
-                      <p className="mt-1 text-xs text-slate-500">
-                        Applied {formatDate(application.created_at)}
-                      </p>
-                    </div>
-
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium capitalize text-slate-700">
-                      {String(application.status).replaceAll('_', ' ')}
-                    </span>
-                  </div>
-
-                  {application.message && (
-                    <p className="mt-3 line-clamp-2 text-sm text-slate-600">
-                      {application.message}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        {/* Player protection */}
-        {player.is_minor && (
-          <Card className="border-amber-200 bg-amber-50 p-5">
-            <div className="flex gap-3">
-              <div className="mt-0.5 shrink-0">
-                <Icon name="shield" size={20} />
-              </div>
-
-              <div>
-                <h2 className="font-semibold text-amber-900">
-                  Minor-player protection is active
-                </h2>
-
-                <p className="mt-1 text-sm leading-6 text-amber-800">
-                  Your account is subject to additional safeguarding controls.
-                  Your profile visibility is managed according to FutWeb's
-                  minor-player protection rules.
-                </p>
-              </div>
-            </div>
-          </Card>
-        )}
-      </div>
-    </AppShell>
-  )
+function formatStatus(value: string) {
+  return value.replace(/_/g, ' ')
 }
 
-function calculateProfileCompleteness(
-  player: {
-    first_name: string
-    last_name: string
-    dob: string
-    nationality: string
-    position_primary: string
-    foot: string
-    height_cm: number | null
-    weight_kg: number | null
-    bio: string | null
-  },
-) {
+function calculateCompleteness(player: {
+  first_name: string
+  last_name: string
+  dob: string
+  nationality: string
+  position_primary: string
+  foot: string
+  height_cm: number | null
+  weight_kg: number | null
+  bio: string | null
+}) {
   const checks = [
     Boolean(player.first_name),
     Boolean(player.last_name),
@@ -702,62 +113,731 @@ function calculateProfileCompleteness(
   return Math.round((completed / checks.length) * 100)
 }
 
-function ProfileCheck({
-  label,
-  complete,
-}: {
-  label: string
-  complete: boolean
-}) {
+export default function PlayerDashboard() {
+  const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const {
+    player,
+    attributes,
+    stats,
+    career,
+    applications,
+    loading,
+    error,
+    refresh,
+  } = usePlayer()
+
+  const typedStats = useMemo(
+    () => stats as MatchStatRow[],
+    [stats],
+  )
+
+  const typedApplications = useMemo(
+    () => applications as ApplicationRow[],
+    [applications],
+  )
+
+  const age = useMemo(
+    () => player ? getAge(player.dob) : null,
+    [player],
+  )
+
+  const completeness = useMemo(
+    () => player ? calculateCompleteness(player) : 0,
+    [player],
+  )
+
+  const recentStats = useMemo(
+    () => typedStats.slice(0, 3),
+    [typedStats],
+  )
+
+  const activeApplications = useMemo(
+    () =>
+      typedApplications.filter(
+        application =>
+          application.status !== 'rejected' &&
+          application.status !== 'withdrawn',
+      ),
+    [typedApplications],
+  )
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="fw-card h-24 animate-pulse bg-ink-50" />
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="fw-card h-48 animate-pulse bg-ink-50" />
+          <div className="fw-card h-48 animate-pulse bg-ink-50 lg:col-span-2" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="fw-card h-28 animate-pulse bg-ink-50" />
+          <div className="fw-card h-28 animate-pulse bg-ink-50" />
+          <div className="fw-card h-28 animate-pulse bg-ink-50" />
+          <div className="fw-card h-28 animate-pulse bg-ink-50" />
+        </div>
+      </div>
+    )
+  }
+
+  if (!player) {
+    return (
+      <div>
+        <PageHeader
+          breadcrumb="Player workspace"
+          title="Complete your player profile"
+          subtitle="Your account is authenticated, but your player profile has not been created yet."
+        />
+
+        <Card className="p-6">
+          <div className="flex flex-col items-center py-10 text-center">
+            <div className="grid h-14 w-14 place-items-center rounded-full bg-ink-100">
+              <Icon name="user" size={24} />
+            </div>
+
+            <h2 className="mt-4 text-base font-bold text-ink-900">
+              Your player profile is not ready
+            </h2>
+
+            <p className="mt-2 max-w-md text-sm leading-relaxed text-ink-500">
+              Complete player onboarding to create your real FutWeb player
+              record. Once created, your profile, statistics, attributes and
+              recruitment activity will appear here.
+            </p>
+
+            {error && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            <div className="mt-5 flex gap-2">
+              <Button
+                onClick={() => navigate('/onboarding/player')}
+              >
+                Complete onboarding
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() => void refresh()}
+              >
+                Retry
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  const fullName = `${player.first_name} ${player.last_name}`.trim()
+  const initials = getInitials(player.first_name, player.last_name)
+
+  const confidence = player.confidence ?? 0
+  const score = player.futweb_score
+  const potential = player.potential
+
+  const checklist = [
+    {
+      label: 'Complete your profile',
+      done: completeness >= 100,
+      to: '/player/profile',
+    },
+    {
+      label: 'Add highlight media',
+      done: false,
+      to: '/player/media',
+    },
+    {
+      label: 'Verify your identity',
+      done: user?.verificationTier !== 'unverified',
+      to: '/player/verify',
+    },
+    {
+      label: 'Add match statistics',
+      done: typedStats.length > 0,
+      to: '/player/stats',
+    },
+    {
+      label: 'Add player ratings',
+      done: Boolean(attributes),
+      to: '/player/attributes',
+    },
+  ]
+
+  const completedChecklist = checklist.filter(
+    item => item.done,
+  ).length
+
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-slate-100 p-3">
-      <div
-        className={`flex h-7 w-7 items-center justify-center rounded-full ${
-          complete
-            ? 'bg-emerald-100 text-emerald-700'
-            : 'bg-slate-100 text-slate-400'
-        }`}
-      >
-        <Icon
-          name={complete ? 'check' : 'minus'}
-          size={14}
+    <div>
+      <PageHeader
+        breadcrumb="Player workspace"
+        title={`Welcome back, ${player.first_name}`}
+        subtitle="Keep your football profile current and make it easier for clubs to evaluate you."
+        actions={
+          <>
+            <Link to="/player/profile">
+              <Button variant="outline" icon="edit">
+                Edit profile
+              </Button>
+            </Link>
+
+            <Link to="/player/trials">
+              <Button icon="search">
+                Find trials
+              </Button>
+            </Link>
+          </>
+        }
+      />
+
+      {/* Player identity */}
+      <Card className="mb-4 overflow-hidden">
+        <div className="flex flex-col gap-5 p-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-ink-900 text-lg font-bold text-white">
+              {initials}
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="truncate text-lg font-bold text-ink-900">
+                  {fullName}
+                </h2>
+
+                {player.is_minor && (
+                  <Badge tone="warn" size="sm">
+                    Minor
+                  </Badge>
+                )}
+              </div>
+
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-500">
+                <span>{player.position_primary}</span>
+
+                {age !== null && (
+                  <span>{age} years</span>
+                )}
+
+                {player.nationality && (
+                  <span>{player.nationality}</span>
+                )}
+
+                <span>
+                  {player.foot === 'both'
+                    ? 'Both feet'
+                    : `${player.foot} foot`}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-ink-50 px-4 py-3 text-center">
+              <p className="text-2xs uppercase tracking-wide text-ink-400">
+                Score
+              </p>
+              <p className="tnum mt-1 font-display text-2xl text-ink-900">
+                {score ?? '—'}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-ink-50 px-4 py-3 text-center">
+              <p className="text-2xs uppercase tracking-wide text-ink-400">
+                Potential
+              </p>
+              <p className="tnum mt-1 font-display text-2xl text-gold-500">
+                {potential ?? '—'}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-ink-50 px-4 py-3 text-center">
+              <p className="text-2xs uppercase tracking-wide text-ink-400">
+                Confidence
+              </p>
+              <p className="tnum mt-1 font-display text-2xl text-trust-500">
+                {confidence}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-ink-100 bg-ink-50/60 px-5 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="flex items-center gap-2 text-xs font-semibold text-ink-600">
+              <span
+                className={cn(
+                  'h-2 w-2 rounded-full',
+                  player.visibility === 'public'
+                    ? 'bg-trust-500'
+                    : player.visibility === 'verified_only'
+                      ? 'bg-gold-500'
+                      : 'bg-ink-300',
+                )}
+              />
+
+              {player.visibility === 'public'
+                ? 'Public profile'
+                : player.visibility === 'verified_only'
+                  ? 'Verified clubs only'
+                  : 'Private profile'}
+            </span>
+
+            <Link
+              to="/player/profile"
+              className="text-xs font-semibold text-red-500 hover:text-red-600"
+            >
+              Manage visibility
+            </Link>
+          </div>
+        </div>
+      </Card>
+
+      {/* Profile strength */}
+      <Card className="mb-4 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-ink-900">
+              Profile strength
+            </h2>
+
+            <p className="text-xs text-ink-500">
+              {completedChecklist} of {checklist.length} recommended items
+              complete
+            </p>
+          </div>
+
+          <span className="font-display text-3xl text-red-500">
+            {completeness}%
+          </span>
+        </div>
+
+        <ProgressBar
+          className="mt-3"
+          value={completeness}
+        />
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {checklist.map(item => (
+            <Link
+              key={item.label}
+              to={item.to}
+              className="flex items-center gap-2.5 rounded-xl border border-ink-100 px-3 py-2.5 transition-colors hover:border-ink-200 hover:bg-ink-50"
+            >
+              <span
+                className={cn(
+                  'grid h-5 w-5 shrink-0 place-items-center rounded-full',
+                  item.done
+                    ? 'bg-trust-400 text-white'
+                    : 'border-2 border-dashed border-ink-300',
+                )}
+              >
+                {item.done && (
+                  <Icon
+                    name="check"
+                    size={11}
+                    strokeWidth={3.5}
+                  />
+                )}
+              </span>
+
+              <span
+                className={cn(
+                  'text-xs font-medium',
+                  item.done
+                    ? 'text-ink-400 line-through'
+                    : 'text-ink-800',
+                )}
+              >
+                {item.label}
+              </span>
+
+              {!item.done && (
+                <Icon
+                  name="arrow-right"
+                  size={13}
+                  className="ml-auto shrink-0 text-ink-300"
+                />
+              )}
+            </Link>
+          ))}
+        </div>
+      </Card>
+
+      {/* Core football data */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="p-5">
+          <p className="text-xs font-semibold text-ink-500">
+            FutWeb Score
+          </p>
+
+          <div className="mt-4 flex items-end gap-3">
+            <span className="font-display text-5xl leading-none text-ink-900">
+              {score ?? '—'}
+            </span>
+
+            {score !== null && (
+              <Badge
+                tone={score >= 72 ? 'trust' : 'gold'}
+                size="sm"
+              >
+                {score >= 72 ? 'Strong' : 'Developing'}
+              </Badge>
+            )}
+          </div>
+
+          <div className="mt-5">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-2xs font-bold uppercase tracking-widest text-ink-400">
+                Data confidence
+              </span>
+
+              <span className="tnum text-xs font-bold text-ink-700">
+                {confidence}
+              </span>
+            </div>
+
+            <ProgressBar
+              value={confidence}
+              tone={confidence >= 65 ? 'trust' : 'gold'}
+            />
+          </div>
+
+          <p className="mt-3 text-2xs leading-relaxed text-ink-500">
+            {confidence >= 65
+              ? 'Your profile has a strong supporting evidence base.'
+              : 'Add verified ratings and performance evidence to improve confidence.'}
+          </p>
+        </Card>
+
+        <Card className="p-5 lg:col-span-2">
+          <CardHeader
+            title="Playing profile"
+            subtitle="The football information clubs see on your profile."
+            action={
+              <Link to="/player/profile">
+                <Button size="sm" variant="ghost">
+                  Edit
+                </Button>
+              </Link>
+            }
+          />
+
+          <div className="grid grid-cols-2 gap-x-6 gap-y-5 p-5 sm:grid-cols-3">
+            <InfoItem
+              label="Primary position"
+              value={player.position_primary}
+            />
+
+            <InfoItem
+              label="Secondary positions"
+              value={
+                player.position_secondary.length > 0
+                  ? player.position_secondary.join(', ')
+                  : 'None added'
+              }
+            />
+
+            <InfoItem
+              label="Preferred foot"
+              value={
+                player.foot === 'both'
+                  ? 'Both'
+                  : `${player.foot} foot`
+              }
+            />
+
+            <InfoItem
+              label="Height"
+              value={
+                player.height_cm
+                  ? `${player.height_cm} cm`
+                  : 'Not provided'
+              }
+            />
+
+            <InfoItem
+              label="Weight"
+              value={
+                player.weight_kg
+                  ? `${player.weight_kg} kg`
+                  : 'Not provided'
+              }
+            />
+
+            <InfoItem
+              label="Availability"
+              value={formatAvailability(player.availability)}
+            />
+          </div>
+        </Card>
+      </div>
+
+      {/* Statistics */}
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat
+          label="Seasons"
+          value={typedStats.length}
+          icon="chart"
+          sub="Recorded in FutWeb"
+        />
+
+        <Stat
+          label="Appearances"
+          value={typedStats.reduce(
+            (total, row) => total + (row.appearances ?? 0),
+            0,
+          )}
+          icon="target"
+          sub="Across recorded seasons"
+        />
+
+        <Stat
+          label="Goals"
+          value={typedStats.reduce(
+            (total, row) => total + (row.goals ?? 0),
+            0,
+          )}
+          icon="star"
+          sub="Recorded goals"
+        />
+
+        <Stat
+          label="Applications"
+          value={activeApplications.length}
+          icon="list"
+          sub="Active recruitment activity"
         />
       </div>
 
-      <span className="text-sm font-medium text-slate-700">
-        {label}
-      </span>
+      {/* Recent stats + applications */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="Recent performance"
+            subtitle="Your latest recorded match statistics."
+            action={
+              <Link to="/player/stats">
+                <Button size="sm" variant="ghost">
+                  View all
+                </Button>
+              </Link>
+            }
+          />
+
+          {recentStats.length === 0 ? (
+            <EmptyState
+              title="No statistics yet"
+              description="Add your first season statistics to start building your performance record."
+              action="Add statistics"
+              to="/player/stats"
+            />
+          ) : (
+            <div className="divide-y divide-ink-100">
+              {recentStats.map(row => (
+                <div
+                  key={row.id}
+                  className="flex items-center justify-between gap-4 px-5 py-4"
+                >
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-ink-900">
+                      {row.season}
+                    </p>
+
+                    <p className="mt-0.5 truncate text-2xs text-ink-500">
+                      {row.competition || 'Competition not specified'}
+                    </p>
+                  </div>
+
+                  <div className="grid shrink-0 grid-cols-3 gap-4 text-right">
+                    <MiniStat
+                      label="Apps"
+                      value={row.appearances ?? 0}
+                    />
+
+                    <MiniStat
+                      label="Goals"
+                      value={row.goals ?? 0}
+                    />
+
+                    <MiniStat
+                      label="Assists"
+                      value={row.assists ?? 0}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Trial applications"
+            subtitle="Your current recruitment activity."
+            action={
+              <Link to="/player/trials">
+                <Button size="sm" variant="ghost">
+                  Browse
+                </Button>
+              </Link>
+            }
+          />
+
+          {typedApplications.length === 0 ? (
+            <EmptyState
+              title="No applications yet"
+              description="Browse open verified trials and apply directly from FutWeb."
+              action="Find trials"
+              to="/player/trials"
+            />
+          ) : (
+            <div className="divide-y divide-ink-100">
+              {typedApplications.slice(0, 5).map(application => (
+                <div
+                  key={application.id}
+                  className="flex items-center gap-3 px-5 py-4"
+                >
+                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-ink-100">
+                    <Icon name="target" size={15} />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-semibold text-ink-900">
+                      Trial application
+                    </p>
+
+                    <p className="mt-0.5 text-2xs text-ink-400">
+                      Applied {formatDate(application.created_at)}
+                    </p>
+                  </div>
+
+                  <Badge
+                    tone={
+                      application.status === 'accepted'
+                        ? 'trust'
+                        : application.status === 'rejected'
+                          ? 'red'
+                          : 'neutral'
+                    }
+                    size="sm"
+                  >
+                    {formatStatus(application.status)}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="border-t border-ink-100 bg-ink-50/60 px-5 py-3">
+            <p className="flex items-center gap-1.5 text-2xs font-semibold text-ink-500">
+              <Icon name="shield" size={12} />
+              FutWeb trial applications are stored against your real player
+              profile.
+            </p>
+          </div>
+        </Card>
+      </div>
+
+      {/* Career */}
+      <Card className="mt-4">
+        <CardHeader
+          title="Career history"
+          subtitle="Your recorded football career."
+          action={
+            <Link to="/player/profile">
+              <Button size="sm" variant="ghost">
+                Manage
+              </Button>
+            </Link>
+          }
+        />
+
+        {career.length === 0 ? (
+          <EmptyState
+            title="No career entries yet"
+            description="Add your clubs, competitions and seasons to build a complete football history."
+            action="Update profile"
+            to="/player/profile"
+          />
+        ) : (
+          <div className="divide-y divide-ink-100">
+            {career.slice(0, 5).map((entry, index) => {
+              const row = entry as {
+                id?: string
+                club_name?: string | null
+                season?: string | null
+                competition?: string | null
+                appearances?: number | null
+                goals?: number | null
+                assists?: number | null
+              }
+
+              return (
+                <div
+                  key={row.id ?? `${row.club_name}-${row.season}-${index}`}
+                  className="grid gap-2 px-5 py-4 sm:grid-cols-[1fr_auto_auto_auto]"
+                >
+                  <div>
+                    <p className="text-xs font-semibold text-ink-900">
+                      {row.club_name || 'Club not specified'}
+                    </p>
+
+                    <p className="mt-0.5 text-2xs text-ink-500">
+                      {row.season || 'Season not specified'}
+                      {row.competition
+                        ? ` · ${row.competition}`
+                        : ''}
+                    </p>
+                  </div>
+
+                  <MiniStat
+                    label="Apps"
+                    value={row.appearances ?? 0}
+                  />
+
+                  <MiniStat
+                    label="Goals"
+                    value={row.goals ?? 0}
+                  />
+
+                  <MiniStat
+                    label="Assists"
+                    value={row.assists ?? 0}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* Minor protection */}
+      {player.is_minor && (
+        <Card className="mt-4 border border-gold-200 bg-gold-50/40 p-5">
+          <div className="flex gap-3">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gold-100">
+              <Icon name="shield" size={17} />
+            </div>
+
+            <div>
+              <h2 className="text-sm font-bold text-ink-900">
+                Minor-player protection is active
+              </h2>
+
+              <p className="mt-1 text-xs leading-relaxed text-ink-600">
+                Your account has additional safeguarding controls. Profile
+                visibility and recruitment access are subject to FutWeb's
+                minor-player protection rules.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
     </div>
-  )
-}
-
-function QuickAction({
-  icon,
-  label,
-  onClick,
-}: {
-  icon: string
-  label: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-    >
-      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100">
-        <Icon name={icon} size={17} />
-      </span>
-
-      <span>{label}</span>
-
-      <Icon
-        name="chevron-right"
-        size={15}
-        className="ml-auto text-slate-400"
-      />
-    </button>
   )
 }
 
@@ -770,29 +850,32 @@ function InfoItem({
 }) {
   return (
     <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+      <p className="text-2xs font-bold uppercase tracking-widest text-ink-400">
         {label}
       </p>
 
-      <p className="mt-1 text-sm font-medium text-slate-800">
+      <p className="mt-1 text-xs font-semibold text-ink-800">
         {value}
       </p>
     </div>
   )
 }
 
-function StatValue({
+function MiniStat({
   label,
   value,
 }: {
   label: string
-  value: number | null | undefined
+  value: number
 }) {
   return (
-    <div>
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">
-        {value ?? 0}
+    <div className="text-right">
+      <p className="text-2xs text-ink-400">
+        {label}
+      </p>
+
+      <p className="tnum mt-0.5 text-xs font-bold text-ink-800">
+        {value}
       </p>
     </div>
   )
@@ -801,29 +884,37 @@ function StatValue({
 function EmptyState({
   title,
   description,
-  actionLabel,
-  onAction,
+  action,
+  to,
 }: {
   title: string
   description: string
-  actionLabel: string
-  onAction: () => void
+  action: string
+  to: string
 }) {
   return (
-    <div className="mt-5 rounded-xl border border-dashed border-slate-200 p-6 text-center">
-      <h3 className="font-medium text-slate-800">{title}</h3>
+    <div className="px-5 py-8 text-center">
+      <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-ink-100">
+        <Icon name="arrow-right" size={15} />
+      </div>
 
-      <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-slate-500">
+      <h3 className="mt-3 text-xs font-bold text-ink-800">
+        {title}
+      </h3>
+
+      <p className="mx-auto mt-1 max-w-sm text-2xs leading-relaxed text-ink-500">
         {description}
       </p>
 
-      <Button
-        variant="secondary"
-        className="mt-4"
-        onClick={onAction}
-      >
-        {actionLabel}
-      </Button>
+      <Link to={to}>
+        <Button
+          className="mt-4"
+          size="sm"
+          variant="outline"
+        >
+          {action}
+        </Button>
+      </Link>
     </div>
   )
 }
@@ -852,3 +943,4 @@ function formatAvailability(
       return value
   }
 }
+
