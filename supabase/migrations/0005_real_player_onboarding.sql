@@ -197,10 +197,10 @@ begin
     p_height_cm,
     p_weight_kg,
     nullif(trim(p_bio), ''),
-    'available',
+      'available'::availability,
     case
-      when v_is_minor then 'verified_only'
-      else 'public'
+      when v_is_minor then 'verified_only'::visibility_scope
+      else 'public'::visibility_scope
     end,
     nullif(trim(p_guardian_name), ''),
     nullif(trim(p_guardian_phone), ''),
