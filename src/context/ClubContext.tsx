@@ -1,4 +1,4 @@
-```tsx
+
 import {
   createContext,
   useCallback,
@@ -110,4 +110,4 @@ export function useClub() {
 
   return context
 }
-```
+
