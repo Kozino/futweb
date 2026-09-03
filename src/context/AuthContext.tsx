@@ -41,6 +41,21 @@ interface SignUpInput {
   fullName: string
   clubName?: string
   phone?: string
+  playerDetails?: {
+    dob: string
+    position: string
+    foot: string
+    height: string
+    weight: string
+    nationality: string
+    stateOfOrigin: string
+  }
+  clubDetails?: {
+    shortName: string
+    country: string
+    stateRegion: string
+    leagueCode: string
+  }
 }
 
 const DEMO_KEY = 'futweb.session'
