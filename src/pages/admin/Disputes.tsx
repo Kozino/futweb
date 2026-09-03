@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Button, Card, EmptyState, Icon, Modal, Skeleton, Tabs, Textarea, toast } from '@/components/ui'
+import { Badge, Button, Card, EmptyState, Modal, Skeleton, Tabs, Textarea, toast } from '@/components/ui'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { formatDate } from '@/lib/utils'
@@ -25,15 +25,17 @@ export default function Disputes() {
   const [saving, setSaving] = useState(false)
 
   async function load() {
+    if (!supabase) { setLoading(false); return }
+    const client = supabase
     setLoading(true)
-    const { data: rows, error } = await supabase.from('disputes').select('*').order('created_at', { ascending: false })
+    const { data: rows, error } = await client.from('disputes').select('*').order('created_at', { ascending: false })
     if (error) { toast({ tone: 'error', title: 'Could not load disputes', description: error.message }); setLoading(false); return }
     const list = rows ?? []
     const peopleIds = [...new Set([...list.map(d => d.reporter_id), ...list.map(d => d.accused_id)].filter(Boolean))] as string[]
     const clubIds = [...new Set(list.map(d => d.accused_club_id).filter(Boolean))] as string[]
     const [profilesRes, clubsRes] = await Promise.all([
-      peopleIds.length ? supabase.from('profiles').select('id, full_name').in('id', peopleIds) : Promise.resolve({ data: [] as { id: string; full_name: string }[] }),
-      clubIds.length ? supabase.from('clubs').select('id, name').in('id', clubIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      peopleIds.length ? client.from('profiles').select('id, full_name').in('id', peopleIds) : Promise.resolve({ data: [] as { id: string; full_name: string }[] }),
+      clubIds.length ? client.from('clubs').select('id, name').in('id', clubIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
     ])
     const nameById = Object.fromEntries((profilesRes.data ?? []).map(p => [p.id, p.full_name]))
     const clubById = Object.fromEntries((clubsRes.data ?? []).map(c => [c.id, c.name]))
@@ -54,6 +56,7 @@ export default function Disputes() {
   ), [all, tab])
 
   async function escalate(d: Dispute) {
+    if (!supabase) return
     setSaving(true)
     const { error } = await supabase.from('disputes').update({
       status: 'escalated', escalated_to_nff: true, handler_id: user?.id,
@@ -65,6 +68,7 @@ export default function Disputes() {
   }
 
   async function uphold(d: Dispute) {
+    if (!supabase) return
     setSaving(true)
     const { error } = await supabase.from('disputes').update({
       status: 'upheld', handler_id: user?.id, resolution: resolution || null,
