@@ -9,16 +9,19 @@ import { hasSupabase } from '@/lib/supabase'
 import { getPublicClubs, getPublicPlayers, type PublicClubRow, type PublicPlayerRow } from '@/lib/publicData'
 
 type Mode = 'players' | 'clubs'
-type ClubUnion = (typeof DEMO_CLUBS)[number] | PublicClubRow
+type DemoClub = (typeof DEMO_CLUBS)[number]
+type ClubUnion = DemoClub | PublicClubRow
 
-function clubState(c: ClubUnion) {
-  return 'state_region' in c ? c.state_region : c.state
+function clubState(c: ClubUnion): string | undefined {
+  return (c as PublicClubRow).state_region ?? (c as DemoClub).state
 }
-function clubLeague(c: ClubUnion) {
-  return 'league_code' in c ? c.league_code : c.league
+function clubLeague(c: ClubUnion): string | undefined {
+  return (c as PublicClubRow).league_code ?? (c as DemoClub).league
 }
-function clubVerified(c: ClubUnion) {
-  return 'entity_verified' in c ? c.entity_verified : c.verification_status === 'verified'
+function clubVerified(c: ClubUnion): boolean {
+  const pub = c as PublicClubRow
+  if (typeof pub.entity_verified === 'boolean') return pub.entity_verified
+  return (c as DemoClub).verification_status === 'verified'
 }
 
 export default function TalentDirectory() {
