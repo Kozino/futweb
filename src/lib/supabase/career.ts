@@ -1,4 +1,3 @@
-```ts
 import { supabase } from '@/lib/supabase'
 
 export async function getPlayerCareer(playerId: string) {
@@ -50,4 +49,3 @@ export async function createCareerEntry(input: CareerEntryInput) {
 
   return data
 }
-```
