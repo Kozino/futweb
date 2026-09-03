@@ -133,29 +133,36 @@ export default function PlayerAttributes() {
   const [loadingRatings, setLoadingRatings] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    if (!player) return
+ useEffect(() => {
+  if (!player) {
+    setLoadingRatings(false)
+    return
+  }
 
-    setPosition(player.position_primary)
+  const playerId = player.id
+  const playerPosition = player.position_primary
 
-    let cancelled = false
+  setPosition(playerPosition)
 
+  let cancelled = false
+   
     async function loadRatings() {
       setLoadingRatings(true)
 
       try {
-        const rows = await getPlayerRatingSnapshots(player.id)
+       const rows = await getPlayerRatingSnapshots(playerId)
 
         if (cancelled) return
 
         const typedSnapshots = rows as RatingSnapshot[]
         setSnapshots(typedSnapshots)
 
-        const latestSelfRating = typedSnapshots.find(
-          snapshot => snapshot.rated_by_role === 'self',
-        )
+      const latestSelfRating =
+  typedSnapshots.find(
+    snapshot => snapshot.rated_by_role === 'self',
+  ) ?? null
 
-        const snapshotAttributes = attributesFromSnapshot(latestSelfRating)
+const snapshotAttributes = attributesFromSnapshot(latestSelfRating)
 
         if (snapshotAttributes) {
           setAttrs(snapshotAttributes)
