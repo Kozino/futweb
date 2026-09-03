@@ -457,10 +457,9 @@ function Onboarding() {
               ? guardianEmail.trim() || null
               : null,
 
-          guardianConsentAt:
-            isMinor
-              ? new Date().toISOString()
-              : null,
+         guardianConsent: isMinor
+  ? guardianConsent
+  : false,
         })
 
       if (!created) {
