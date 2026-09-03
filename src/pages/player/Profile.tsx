@@ -567,8 +567,10 @@ export default function PlayerProfile() {
 
           <div className="space-y-4">
             {player.is_minor && (
-              <MinorProtectionNotice guardianName={player.guardian_name} />
-            )}
+            {player.is_minor && (
+  <MinorProtectionNotice guardianName={player.guardian_name ?? undefined} />
+)}
+        
 
             <Card className="p-5">
               <CardHeader
