@@ -127,7 +127,7 @@ function aggregateStats(rows: MatchStatsRow[]): MatchStatsRow {
 export default function PlayerStats() {
   const { player, stats, loading } = usePlayer()
 
-  const rows = stats as MatchStatsRow[]
+const rows = stats as unknown as MatchStatsRow[]
 
   const seasons = useMemo(() => {
     return Array.from(
