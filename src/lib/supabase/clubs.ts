@@ -1,4 +1,3 @@
-```ts
 import { supabase } from '@/lib/supabase'
 
 export interface ClubRow {
@@ -151,4 +150,4 @@ export async function updateMyClubProfile(
 
   return data as ClubRow
 }
-```
+
