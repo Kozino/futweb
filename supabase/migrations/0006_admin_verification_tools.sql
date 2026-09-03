@@ -15,7 +15,6 @@
 --         a user self-verify — only an admin can raise the tier afterwards)
 -- ============================================================================
 
--- ---------------------------------------------------------- new columns ----
 alter table public.profiles
   add column if not exists suspended_at   timestamptz,
   add column if not exists suspended_reason text;
@@ -27,19 +26,13 @@ alter table public.clubs
 alter table public.verification_requests
   add column if not exists payload jsonb not null default '{}'::jsonb;
 
--- Allow liveness selfie clips (video) plus document scans into the private
--- verification bucket. Ownership + admin-read policies are unchanged.
 update storage.buckets
    set allowed_mime_types = array[
          'image/jpeg','image/png','image/webp','application/pdf',
          'video/mp4','video/webm','video/quicktime'
        ],
-       file_size_limit = 52428800  -- 50MB: liveness clips need headroom
+       file_size_limit = 52428800
  where id = 'verification';
-
--- ============================================================================
--- Admin moderation RPCs
--- ============================================================================
 
 -- Suspend / reinstate a profile (player or club account owner).
 create or replace function public.admin_set_suspension(
@@ -81,7 +74,6 @@ end;
 $$;
 
 -- Verify a person/player account: raises the identity tier + marks verified.
--- Never callable except by an admin (tier escalation is the security gate).
 create or replace function public.admin_verify_profile(
   p_user_id uuid,
   p_tier    text default 'identity'
@@ -138,7 +130,6 @@ begin
          updated_at = now()
    where id = p_club_id;
 
-  -- The owning profile is entity-tier (never gold without a liveness check).
   update public.profiles
      set verification_tier   = 'entity'::verification_tier,
          verification_status = 'verified',
@@ -155,7 +146,6 @@ end;
 $$;
 
 -- "Message a user" — delivered through the in-app notification centre.
--- Restricted to admins for now; future direct conversations can build on it.
 create or replace function public.admin_send_notification(
   p_to_user uuid,
   p_title   text,
@@ -179,17 +169,11 @@ begin
 end;
 $$;
 
--- ============================================================================
 -- Self-service verification submission (players AND clubs)
--- ----------------------------------------------------------------------------
--- Caller = the authenticated owner. We always store a *request* as 'pending'
--- and only mark the profile/record's status, never the verification tier.
--- Raising the tier (the real trust signal) remains an admin-only action.
--- ============================================================================
 create or replace function public.submit_verification_request(
-  p_kind      text,                 -- identity | entity | liveness | references
+  p_kind      text,
   p_payload   jsonb default '{}'::jsonb,
-  p_docs      jsonb default '[]'::jsonb  -- [{ "kind": text, "storage_path": text }]
+  p_docs      jsonb default '[]'::jsonb
 ) returns uuid
 language plpgsql security definer
 set search_path = public, pg_temp
@@ -225,7 +209,6 @@ begin
     values (v_id, v_doc->>'kind', v_doc->>'storage_path');
   end loop;
 
-  -- Surface "pending" but never self-verify. Tier stays where the admin put it.
   update public.profiles
      set verification_status = 'pending',
          updated_at = now()
@@ -244,4 +227,4 @@ grant execute on function public.admin_set_suspension(text, uuid, boolean, text)
 grant execute on function public.admin_verify_profile(uuid, text) to authenticated;
 grant execute on function public.admin_verify_club(uuid) to authenticated;
 grant execute on function public.admin_send_notification(uuid, text, text, text) to authenticated;
-grant execute on function public.submit_verification_request(text, jsonb) to authenticated;
+grant execute on function public.submit_verification_request(text, jsonb, jsonb) to authenticated;
