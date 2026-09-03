@@ -1,38 +1,90 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Button, Card, EmptyState, Icon, Input, ProgressBar, Select, Skeleton, Tabs } from '@/components/ui'
+import { Badge, Button, Card, EmptyState, Icon, Input, Modal, ProgressBar, Select, Skeleton, Tabs, toast } from '@/components/ui'
 import { useClub } from '@/context/ClubContext'
-import { hasSupabase } from '@/lib/supabase'
-import { getClubSquad, type EnrichedPlayer } from '@/lib/supabase/workspace'
+import { useAuth } from '@/context/AuthContext'
+import { hasSupabase, supabase } from '@/lib/supabase'
+import { getClubSquad, getDiscoverablePlayers, type EnrichedPlayer } from '@/lib/supabase/workspace'
 
 export default function Squad() {
   const { club } = useClub()
+  const { user } = useAuth()
   const [squad, setSquad] = useState<EnrichedPlayer[]>([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [pos, setPos] = useState('')
   const [tab, setTab] = useState<'grid' | 'table'>('grid')
 
+  // Add-player modal state
+  const [addOpen, setAddOpen] = useState(false)
+  const [candidates, setCandidates] = useState<EnrichedPlayer[]>([])
+  const [candidateQuery, setCandidateQuery] = useState('')
+  const [searching, setSearching] = useState(false)
+  const [claiming, setClaiming] = useState(false)
+
   const clubId = club?.id
+
+  const loadSquad = async () => {
+    if (!hasSupabase || !clubId) return []
+    return getClubSquad(clubId)
+  }
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       if (!hasSupabase || !clubId) { setLoading(false); return }
       try {
-        const rows = await getClubSquad(clubId)
+        const rows = await loadSquad()
         if (!cancelled) setSquad(rows)
-      } catch { /* toast handled by empty state */ } finally {
+      } catch { /* ignore */ } finally {
         if (!cancelled) setLoading(false)
       }
     })()
     return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clubId])
 
   const rows = squad.filter(p =>
     (!q || `${p.first_name} ${p.last_name}`.toLowerCase().includes(q.toLowerCase())) &&
     (!pos || p.position_primary === pos))
+
+  async function openAdd() {
+    setAddOpen(true)
+    setCandidateQuery('')
+    if (!hasSupabase || !supabase) return
+    setSearching(true)
+    try {
+      // Candidates = players this club can view that aren't already in the squad.
+      const all = await getDiscoverablePlayers()
+      const inSquad = new Set(squad.map(s => s.id))
+      setCandidates(all.filter(p => !inSquad.has(p.id)))
+    } catch (err) {
+      toast({ tone: 'error', title: 'Could not load players', description: err instanceof Error ? err.message : 'Please try again.' })
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  async function claimPlayer(player: EnrichedPlayer) {
+    if (!supabase || !clubId) return
+    setClaiming(true)
+    try {
+      const { error } = await supabase.rpc('club_claim_player', { p_player_id: player.id })
+      if (error) throw error
+      setSquad(await loadSquad())
+      setCandidates(c => c.filter(x => x.id !== player.id))
+      toast({ tone: 'success', title: `${player.first_name} added to squad`, description: 'Their profile is now managed by your club.' })
+    } catch (err) {
+      toast({ tone: 'error', title: 'Could not add player', description: err instanceof Error ? err.message : 'Please try again.' })
+    } finally {
+      setClaiming(false)
+    }
+  }
+
+  const shownCandidates = candidates.filter(p =>
+    !candidateQuery || `${p.first_name} ${p.last_name}`.toLowerCase().includes(candidateQuery.toLowerCase()))
+  const isVerifiedClub = club?.entity_verified ?? false
 
   if (loading) return <Skeleton className="h-64 w-full" />
 
@@ -43,7 +95,7 @@ export default function Squad() {
         actions={
           <>
             <Button variant="outline" icon="upload">Import CSV</Button>
-            <Button icon="plus" onClick={() => {}}>Add player</Button>
+            <Button icon="plus" onClick={() => void openAdd()}>Add player</Button>
           </>
         } />
 
@@ -53,8 +105,8 @@ export default function Squad() {
         </Card>
       ) : squad.length === 0 ? (
         <Card className="p-8"><EmptyState icon="users" title="No players yet"
-          description="Add players to your squad to start tracking attributes, stats and development."
-          action={<Button icon="plus">Add player</Button>} /></Card>
+          description="Add a registered player to your squad to start tracking attributes, stats and development."
+          action={<Button icon="plus" onClick={() => void openAdd()}>Add player</Button>} /></Card>
       ) : (
         <>
           <div className="mb-4 flex flex-wrap gap-3">
@@ -157,6 +209,47 @@ export default function Squad() {
           )}
         </>
       )}
+
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} size="lg" title="Add a player to your squad"
+        description="Choose a registered player your club can view who isn't attached to another club.">
+        {!isVerifiedClub && (
+          <div className="mb-3 flex items-start gap-2 rounded-xl border border-gold-200 bg-gold-50 p-3 text-xs text-gold-800">
+            <Icon name="alert" size={15} className="mt-0.5 shrink-0" />
+            <span>Your club must be <strong>entity verified</strong> to add players. Complete it in the Verification tab first.</span>
+          </div>
+        )}
+
+        <Input className="mb-3" icon="search" placeholder="Search by name…" value={candidateQuery}
+          onChange={e => setCandidateQuery(e.target.value)} />
+
+        <div className="fw-scroll max-h-[380px] space-y-2 overflow-y-auto pr-1">
+          {searching ? (
+            <Skeleton className="h-24 w-full" />
+          ) : shownCandidates.length === 0 ? (
+            <p className="py-8 text-center text-sm text-ink-400">
+              {candidateQuery ? 'No players match that name.' : 'No unattached players are currently visible to your club.'}
+            </p>
+          ) : shownCandidates.map(p => (
+            <div key={p.id} className="flex items-center gap-3 rounded-xl border border-ink-100 p-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-ink-900 text-2xs font-bold text-white">
+                {p.position_primary}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-bold">{p.first_name} {p.last_name}</p>
+                <p className="text-2xs text-ink-500">{p.age} yrs · {p.position_primary} · {p.state_of_origin ?? '—'}</p>
+              </div>
+              <div className="text-right">
+                <p className="tnum text-sm font-bold text-red-600">{p.score.current}</p>
+                <p className="text-2xs text-ink-400">{p.score.potential} pot</p>
+              </div>
+              <Button size="sm" variant="outline" icon="plus" loading={claiming}
+                disabled={!isVerifiedClub || !user} onClick={() => void claimPlayer(p)}>
+                Add
+              </Button>
+            </div>
+          ))}
+        </div>
+      </Modal>
     </div>
   )
 }
