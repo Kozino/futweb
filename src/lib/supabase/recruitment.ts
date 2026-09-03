@@ -1,4 +1,3 @@
-```ts
 import { supabase } from '@/lib/supabase'
 
 export async function getClubPlayers(clubId: string) {
@@ -247,4 +246,3 @@ export async function getClubTrialApplications(trialId: string) {
 
   return data ?? []
 }
-```
