@@ -99,7 +99,7 @@ export default function Verification() {
   }
 
   async function viewDoc(path: string) {
-    const { data, error } = await supabase.storage.from('verification-documents').createSignedUrl(path, 300)
+    const { data, error } = await supabase.storage.from('verification').createSignedUrl(path, 300)
     if (error || !data) { toast({ tone: 'error', title: 'Could not open document', description: error?.message ?? 'Unknown error' }); return }
     window.open(data.signedUrl, '_blank')
   }
