@@ -208,10 +208,10 @@ export default function PlayerProfile() {
     bio: form.bio.trim() || null,
     availability: form.availability,
     visibility: form.visibility,
-    contract_expiry:
-      form.contract_expiry.trim() === ''
-        ? null
-        : form.contract_expiry,
+   contract_expiry:
+  form.contract_expiry.trim() === ''
+    ? undefined
+    : form.contract_expiry,
   })
 
   toast({
