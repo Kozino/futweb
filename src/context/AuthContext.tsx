@@ -97,8 +97,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(async (email: string, password: string) => {
     if (hasSupabase && supabase) {
       // Generic error on purpose: never reveal whether an email exists (user enumeration).
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) return { error: 'Invalid email or password.' }
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error || !data.user) return { error: 'Invalid email or password.' }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single()
+      if (profile) setUser(mapProfile(profile, data.user.email ?? email))
       return {}
     }
     await new Promise(r => setTimeout(r, 600))
