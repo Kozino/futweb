@@ -112,7 +112,8 @@ export async function updateMyPlayerProfile(
     bio: input.bio,
     availability: input.availability,
     visibility: input.visibility,
-    contract_expiry: input.contract_expiry,
+   contract_expiry:
+  input.contract_expiry === '' ? null : input.contract_expiry,
   }
 
   const update = Object.fromEntries(
