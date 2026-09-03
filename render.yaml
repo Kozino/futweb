@@ -1,0 +1,56 @@
+# FutWeb on Render
+#
+# You do NOT need both Render and Netlify — pick one static host for the
+# frontend. The two `create-checkout` / `flutterwave-webhook` edge functions
+# already live in Supabase Functions and are the complete billing backend;
+# the second service below is an OPTIONAL alternative to that (e.g. if you
+# ever want billing outside Supabase) and is not required to run FutWeb.
+#
+# IMPORTANT: the second service points at `./docker/billing.Dockerfile`,
+# which does not exist in this repository — it's a placeholder for a future
+# standalone relay. Deploying it as-is will fail. Leave it commented out
+# (or delete it) unless you build that Dockerfile first; see
+# `docs/DEPLOYMENT.md` for the recommended Netlify + Supabase path, which
+# needs none of this.
+services:
+  # Static SPA (alternative to Netlify — deploy to ONE of the two, not both)
+  - type: web
+    name: futweb-web
+    runtime: static
+    repo: https://github.com/your-org/futweb
+    branch: main
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  # OPTIONAL — NOT REQUIRED. Standalone webhook relay if you deliberately
+  # choose to run billing outside Supabase Functions. Commented out because
+  # `./docker/billing.Dockerfile` doesn't exist yet in this repo.
+  # - type: web
+  #   name: futweb-billing-api
+  #   runtime: docker
+  #   repo: https://github.com/your-org/futweb
+  #   branch: main
+  #   dockerfilePath: ./docker/billing.Dockerfile
+  #   plan: starter
+  #   healthCheckPath: /health
+  #   envVars:
+  #     - key: SUPABASE_URL
+  #       sync: false
+  #     - key: SUPABASE_SERVICE_ROLE_KEY
+  #       sync: false
+  #     - key: FLW_SECRET_HASH
+  #       sync: false
+  #     - key: FLW_SECRET_KEY
+  #       sync: false
+  #     - key: APP_URL
+  #       sync: false
+

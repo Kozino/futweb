@@ -1,0 +1,17 @@
+{
+  "name": "FutWeb — Football Talent Intelligence",
+  "short_name": "FutWeb",
+  "description": "Verified football player CVs, offline scouting and trusted trials for African football.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0A0F1C",
+  "theme_color": "#0A0F1C",
+  "categories": ["sports", "business", "productivity"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

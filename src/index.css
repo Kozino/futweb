@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --fw-red: #E4002B;
+    --fw-ink: #0A0F1C;
+    --fw-gold: #F5B301;
+    --fw-trust: #00B67A;
+    --header-h: 60px;
+    --sidebar-w: 248px;
+  }
+
+  * { -webkit-tap-highlight-color: transparent; }
+
+  html, body, #root { height: 100%; }
+
+  body {
+    @apply bg-white text-ink-900 font-sans antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+
+  /* Respect user motion preferences — accessibility baseline */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Visible, consistent focus ring — WCAG 2.4.7 */
+  :focus-visible {
+    outline: 2px solid var(--fw-red);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  .on-dark :focus-visible { outline-color: #FF5A71; }
+
+  ::selection { background: rgba(228,0,43,0.18); }
+
+  /* Slim scrollbars inside app shells */
+  .fw-scroll { scrollbar-width: thin; scrollbar-color: #C3CADA transparent; }
+  .fw-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+  .fw-scroll::-webkit-scrollbar-thumb { background: #C3CADA; border-radius: 99px; }
+  .fw-scroll::-webkit-scrollbar-track { background: transparent; }
+  .on-dark.fw-scroll { scrollbar-color: #33405C transparent; }
+  .on-dark.fw-scroll::-webkit-scrollbar-thumb { background: #33405C; }
+}
+
+@layer components {
+  .fw-container { @apply mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8; }
+
+  .fw-card {
+    @apply rounded-2xl border border-ink-100 bg-white shadow-card transition-shadow duration-200;
+  }
+  .fw-card-hover:hover { @apply shadow-card-hover; }
+
+  .fw-label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-500;
+  }
+
+  .fw-input {
+    @apply w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 text-sm text-ink-900
+           placeholder:text-ink-400 transition-all duration-150
+           focus:border-red-500 focus:outline-none focus:ring-4 focus:ring-red-500/10
+           disabled:cursor-not-allowed disabled:bg-ink-50 disabled:text-ink-400;
+  }
+  .fw-input-error { @apply border-red-500 focus:ring-red-500/20; }
+
+  .fw-skeleton {
+    @apply relative overflow-hidden rounded-lg bg-ink-100;
+  }
+  .fw-skeleton::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.65), transparent);
+  }
+
+  /* Numeric/data display */
+  .fw-stat { @apply font-display text-3xl leading-none tracking-wide text-ink-900; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* Offline-safe: hide interactive affordances while syncing */
+  .is-syncing { @apply opacity-60 pointer-events-none; }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .safe-b { padding-bottom: env(safe-area-inset-bottom); }
+}
