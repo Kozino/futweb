@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge, Button, Card, Input, Select, Skeleton, toast } from '@/components/ui'
 import { supabase } from '@/lib/supabase'
-import { cn, ageFrom } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+import { ageFrom } from '@/lib/ratings'
 
 interface PlayerRow {
   id: string; first_name: string; last_name: string; dob: string
@@ -19,15 +20,17 @@ export default function AdminPlayers() {
   const [filter, setFilter] = useState('')
 
   useEffect(() => {
+    if (!supabase) { setLoading(false); return }
+    const client = supabase
     let cancelled = false
     ;(async () => {
-      const { data, error } = await supabase.from('players').select('*').order('created_at', { ascending: false })
+      const { data, error } = await client.from('players').select('*').order('created_at', { ascending: false })
       if (error) { toast({ tone: 'error', title: 'Could not load players', description: error.message }); setLoading(false); return }
       const rows = data ?? []
       const clubIds = [...new Set(rows.map(p => p.managed_by_club_id).filter(Boolean))] as string[]
       let names: Record<string, string> = {}
       if (clubIds.length) {
-        const { data: clubs } = await supabase.from('clubs').select('id, name').in('id', clubIds)
+        const { data: clubs } = await client.from('clubs').select('id, name').in('id', clubIds)
         names = Object.fromEntries((clubs ?? []).map(c => [c.id, c.name]))
       }
       if (!cancelled) { setPlayers(rows); setClubNames(names); setLoading(false) }
