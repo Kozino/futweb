@@ -1,4 +1,4 @@
-```ts
+
 import { supabase } from '@/lib/supabase'
 
 export const PLAYER_ATTRIBUTE_KEYS = [
@@ -112,4 +112,4 @@ export async function getPlayerRatingSnapshots(playerId: string) {
 
   return data ?? []
 }
-```
+
