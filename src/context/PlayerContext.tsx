@@ -1,4 +1,4 @@
-```tsx
+
 import {
   createContext,
   useCallback,
@@ -163,4 +163,4 @@ export function usePlayer() {
 
   return context
 }
-```
+
