@@ -19,9 +19,11 @@ export default function AdminClubs() {
   const [verified, setVerified] = useState('')
 
   useEffect(() => {
+    if (!supabase) { setLoading(false); return }
+    const client = supabase
     let cancelled = false
     ;(async () => {
-      const { data, error } = await supabase.from('clubs').select('*').order('created_at', { ascending: false })
+      const { data, error } = await client.from('clubs').select('*').order('created_at', { ascending: false })
       if (!cancelled) {
         if (error) toast({ tone: 'error', title: 'Could not load clubs', description: error.message })
         setClubs(data ?? [])
