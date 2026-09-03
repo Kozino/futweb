@@ -193,38 +193,42 @@ export default function PlayerProfile() {
 
     setSaving(true)
 
-    try {
-      await updateProfile({
-        first_name: firstName,
-        last_name: lastName,
-        dob: form.dob,
-        nationality,
-        state_of_origin: form.state_of_origin || null,
-        position_primary: positionPrimary,
-        position_secondary: secondaryPositions,
-        foot: form.foot,
-        height_cm: height,
-        weight_kg: weight,
-        bio: form.bio.trim() || null,
-        availability: form.availability,
-        visibility: form.visibility,
-        contract_expiry: form.contract_expiry || undefined,
-      })
+  try {
+  await updateProfile({
+    first_name: firstName,
+    last_name: lastName,
+    dob: form.dob,
+    nationality,
+    state_of_origin: form.state_of_origin || null,
+    position_primary: positionPrimary,
+    position_secondary: secondaryPositions,
+    foot: form.foot,
+    height_cm: height,
+    weight_kg: weight,
+    bio: form.bio.trim() || null,
+    availability: form.availability,
+    visibility: form.visibility,
+    contract_expiry:
+      form.contract_expiry.trim() === ''
+        ? null
+        : form.contract_expiry,
+  })
 
-      toast({
-        tone: 'success',
-        title: 'Profile saved',
-        description: 'Your player profile has been updated.',
-      })
-    } catch (err) {
-      toast({
-        tone: 'error',
-        title: 'Could not save profile',
-        description: err instanceof Error ? err.message : 'Please try again.',
-      })
-    } finally {
-      setSaving(false)
-    }
+  toast({
+    tone: 'success',
+    title: 'Profile saved',
+    description: 'Your player profile has been updated.',
+  })
+} catch (err) {
+  toast({
+    tone: 'error',
+    title: 'Could not save profile',
+    description:
+      err instanceof Error ? err.message : 'Please try again.',
+  })
+} finally {
+  setSaving(false)
+}
   }
 
   if (loading && !player) {
