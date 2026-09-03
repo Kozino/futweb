@@ -60,11 +60,14 @@ export default function Register() {
   function validateDetails() {
     const e: Record<string, string> = {}
     if (type === 'club') {
-      if (!runValidators(form.clubName, [validators.required])) e.clubName = 'Club name is required'
-      if (!runValidators(form.state, [validators.required])) e.state = 'Select a state or region'
+-     if (!runValidators(form.clubName, [validators.required])) e.clubName = 'Club name is required'
+-     if (!runValidators(form.state, [validators.required])) e.state = 'Select a state or region'
++     if (runValidators(form.clubName, [validators.required])) e.clubName = 'Club name is required'
++     if (runValidators(form.state, [validators.required])) e.state = 'Select a state or region'
     } else {
       if (!form.dob) e.dob = 'Date of birth is required'
-      if (!runValidators(form.position, [validators.required])) e.position = 'Select your main position'
+-     if (!runValidators(form.position, [validators.required])) e.position = 'Select your main position'
++     if (runValidators(form.position, [validators.required])) e.position = 'Select your main position'
     }
     setErrors(e)
     return Object.keys(e).length === 0
