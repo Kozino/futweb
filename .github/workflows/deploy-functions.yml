@@ -1,0 +1,45 @@
+name: Deploy Supabase Edge Functions
+
+# Deploys the FutWeb edge functions to Supabase whenever their code changes.
+# This removes the need to run `supabase functions deploy` locally.
+#
+# SECRETS — add these to your GitHub repo (Settings → Secrets and variables →
+# Actions → New repository secret), otherwise the job will fail:
+#   SUPABASE_ACCESS_TOKEN : create at https://supabase.com/dashboard/account/tokens
+#   SUPABASE_PROJECT_ID   : the <ref> part of your project URL,
+#                           e.g. bmfxhbkeskihzmsdvwiw
+#
+# Function *secrets* (Flutterwave keys, ALLOWED_ORIGIN, secret hash) are set once
+# via the Supabase CLI and persist across redeploys, so they are not managed here.
+
+on:
+  push:
+    branches: [main]
+    # Re-deploy only when an edge function or its shared helper changes.
+    paths:
+      - 'supabase/functions/**'
+  workflow_dispatch: {} # manual trigger from the Actions tab
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy create-checkout
+        run: supabase functions deploy create-checkout
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+
+      - name: Deploy flutterwave-webhook (no JWT — Flutterwave calls it)
+        run: supabase functions deploy flutterwave-webhook --no-verify-jwt
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
