@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Button, Card, Icon, Input, Select, Skeleton, toast } from '@/components/ui'
+import { Badge, Button, Card, Input, Select, Skeleton, toast } from '@/components/ui'
 import { supabase } from '@/lib/supabase'
 import { relativeTime } from '@/lib/utils'
 
@@ -26,9 +26,11 @@ export default function Audit() {
   const [role, setRole] = useState('')
 
   useEffect(() => {
+    if (!supabase) { setLoading(false); return }
+    const client = supabase
     let cancelled = false
     ;(async () => {
-      const { data, error } = await supabase.from('audit_log').select('*')
+      const { data, error } = await client.from('audit_log').select('*')
         .order('created_at', { ascending: false }).limit(200)
       if (!cancelled) {
         if (error) toast({ tone: 'error', title: 'Could not load audit log', description: error.message })
