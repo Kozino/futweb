@@ -25,8 +25,10 @@ export default function Verification() {
   const [saving, setSaving] = useState(false)
 
   async function load() {
+    if (!supabase) { setLoading(false); return }
+    const client = supabase
     setLoading(true)
-    const { data: reqs, error } = await supabase
+    const { data: reqs, error } = await client
       .from('verification_requests')
       .select('*')
       .order('submitted_at', { ascending: false })
@@ -38,9 +40,9 @@ export default function Verification() {
     const reqIds = rows.map(r => r.id)
 
     const [profilesRes, clubsRes, docsRes] = await Promise.all([
-      subjectIds.length ? supabase.from('profiles').select('id, full_name').in('id', subjectIds) : Promise.resolve({ data: [] as { id: string; full_name: string }[] }),
-      clubIds.length ? supabase.from('clubs').select('id, name').in('id', clubIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
-      reqIds.length ? supabase.from('verification_documents').select('*').in('request_id', reqIds) : Promise.resolve({ data: [] as (VDoc & { request_id: string })[] }),
+      subjectIds.length ? client.from('profiles').select('id, full_name').in('id', subjectIds) : Promise.resolve({ data: [] as { id: string; full_name: string }[] }),
+      clubIds.length ? client.from('clubs').select('id, name').in('id', clubIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      reqIds.length ? client.from('verification_documents').select('*').in('request_id', reqIds) : Promise.resolve({ data: [] as (VDoc & { request_id: string })[] }),
     ])
     const nameById = Object.fromEntries((profilesRes.data ?? []).map(p => [p.id, p.full_name]))
     const clubById = Object.fromEntries((clubsRes.data ?? []).map(c => [c.id, c.name]))
@@ -68,6 +70,7 @@ export default function Verification() {
   ), [all, tab])
 
   async function decide(r: VRequest, approve: boolean) {
+    if (!supabase) return
     setSaving(true)
     const { error } = await supabase.from('verification_requests').update({
       status: approve ? 'verified' : 'rejected',
@@ -82,7 +85,6 @@ export default function Verification() {
       return
     }
 
-    // If this was a club verification and it's approved, reflect it on the club record too.
     if (approve && r.club_id) {
       await supabase.from('clubs').update({
         entity_verified: true, entity_verified_at: new Date().toISOString(),
@@ -99,6 +101,7 @@ export default function Verification() {
   }
 
   async function viewDoc(path: string) {
+    if (!supabase) return
     const { data, error } = await supabase.storage.from('verification').createSignedUrl(path, 300)
     if (error || !data) { toast({ tone: 'error', title: 'Could not open document', description: error?.message ?? 'Unknown error' }); return }
     window.open(data.signedUrl, '_blank')
