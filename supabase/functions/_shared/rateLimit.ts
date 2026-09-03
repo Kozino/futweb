@@ -7,6 +7,7 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 })
 
+
 export async function rateLimit(key: string, limit: number, windowSeconds: number) {
   const now = new Date()
   const { data: existing } = await admin
