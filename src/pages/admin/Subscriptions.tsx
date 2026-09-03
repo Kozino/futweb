@@ -21,16 +21,18 @@ export default function Subscriptions() {
   const [subs, setSubs] = useState<SubRow[]>([])
 
   useEffect(() => {
+    if (!supabase) { setLoading(false); return }
+    const client = supabase
     let cancelled = false
     ;(async () => {
-      const { data: rows, error } = await supabase.from('subscriptions').select('*').order('created_at', { ascending: false })
+      const { data: rows, error } = await client.from('subscriptions').select('*').order('created_at', { ascending: false })
       if (error) { toast({ tone: 'error', title: 'Could not load subscriptions', description: error.message }); setLoading(false); return }
       const list = rows ?? []
       const subscriberIds = [...new Set(list.map(s => s.subscriber))]
       const planCodes = [...new Set(list.map(s => s.plan_code))]
       const [profilesRes, plansRes] = await Promise.all([
-        subscriberIds.length ? supabase.from('profiles').select('id, full_name, club_name').in('id', subscriberIds) : Promise.resolve({ data: [] as { id: string; full_name: string; club_name: string | null }[] }),
-        planCodes.length ? supabase.from('plans').select('code, name, price_ngn').in('code', planCodes) : Promise.resolve({ data: [] as { code: string; name: string; price_ngn: number }[] }),
+        subscriberIds.length ? client.from('profiles').select('id, full_name, club_name').in('id', subscriberIds) : Promise.resolve({ data: [] as { id: string; full_name: string; club_name: string | null }[] }),
+        planCodes.length ? client.from('plans').select('code, name, price_ngn').in('code', planCodes) : Promise.resolve({ data: [] as { code: string; name: string; price_ngn: number }[] }),
       ])
       const orgById = Object.fromEntries((profilesRes.data ?? []).map(p => [p.id, p.club_name || p.full_name]))
       const planByCode = Object.fromEntries((plansRes.data ?? []).map(p => [p.code, p]))
