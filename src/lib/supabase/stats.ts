@@ -1,4 +1,3 @@
-```ts
 import { supabase } from '@/lib/supabase'
 
 export interface MatchStatsInput {
@@ -79,4 +78,3 @@ export async function upsertPlayerStats(input: MatchStatsInput) {
 
   return data
 }
-```
