@@ -1,40 +1,90 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Button, Card, Icon, Modal, Tabs, Textarea, toast } from '@/components/ui'
+import { Badge, Button, Card, EmptyState, Icon, Modal, Skeleton, Tabs, Textarea, toast } from '@/components/ui'
 import { AttributeRadar } from '@/components/player/Radar'
 import { AttributeBars, ConfidenceMeter, PositionFitBar, ScoreRing } from '@/components/player/Attributes'
 import { MinorProtectionNotice } from '@/components/trust'
-import { DEMO_PLAYERS, enrichPlayer } from '@/data/mock'
 import { ATTRIBUTE_GROUPS, per90 } from '@/lib/ratings'
 import { useOffline } from '@/context/OfflineContext'
+import { useAuth } from '@/context/AuthContext'
+import { hasSupabase, supabase } from '@/lib/supabase'
+import { getPlayerDetail, type EnrichedPlayer } from '@/lib/supabase/workspace'
 import { cn, formatDate } from '@/lib/utils'
 
 export default function PlayerDetail() {
   const { id } = useParams()
-  const player = useMemo(() => {
-    const p = DEMO_PLAYERS.find(x => x.id === id) ?? DEMO_PLAYERS[0]
-    return enrichPlayer(p)
-  }, [id])
+  const { online, enqueue } = useOffline()
+  const { user } = useAuth()
+
+  const [player, setPlayer] = useState<EnrichedPlayer | null>(null)
+  const [loading, setLoading] = useState(true)
 
   const [tab, setTab] = useState<'attributes' | 'stats' | 'media' | 'reports'>('attributes')
   const [reportOpen, setReportOpen] = useState(false)
   const [recommendation, setRecommendation] = useState<'sign' | 'trial' | 'monitor' | 'pass'>('trial')
   const [stars, setStars] = useState(3)
   const [note, setNote] = useState('')
-  const { online, enqueue } = useOffline()
-  const p90 = per90(player.matchStats)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (!hasSupabase || !id) { setLoading(false); return }
+      try {
+        const p = await getPlayerDetail(id)
+        if (!cancelled) setPlayer(p)
+      } catch { if (!cancelled) toast({ tone: 'error', title: 'Could not load player' }) }
+      finally { if (!cancelled) setLoading(false) }
+    })()
+    return () => { cancelled = true }
+  }, [id])
 
   async function submitReport() {
-    await enqueue('report', {
-      player_id: player.id, recommendation, stars, note,
-      captured_at: new Date().toISOString()})
+    if (!player) return
+    if (!note.trim()) {
+      toast({ tone: 'error', title: 'Add some notes', description: 'Write what you saw before submitting.' })
+      return
+    }
+    try {
+      if (online && hasSupabase && supabase && user) {
+        const { error } = await supabase.from('scout_reports').insert({
+          player_id: player.id,
+          author_id: user.id,
+          rating: stars,
+          recommendation,
+          text: note.trim(),
+        })
+        if (error) throw error
+        toast({ tone: 'success', title: 'Report saved', description: 'Visible to your staff immediately.' })
+      } else {
+        await enqueue('report', {
+          player_id: player.id, recommendation, stars, note,
+          captured_at: new Date().toISOString()})
+        toast({
+          tone: 'info',
+          title: 'Report saved on this device',
+          description: 'It will sync when you reconnect.'})
+      }
+    } catch (err) {
+      toast({ tone: 'error', title: 'Could not save report', description: err instanceof Error ? err.message : 'Please try again.' })
+    }
     setReportOpen(false); setNote('')
-    toast({
-      tone: online ? 'success' : 'info',
-      title: online ? 'Report saved' : 'Report saved on this device',
-      description: online ? 'Visible to your staff immediately.' : 'It will sync when you reconnect.'})
   }
+
+  if (loading) return <Skeleton className="h-64 w-full" />
+
+  if (!player) {
+    return (
+      <div>
+        <PageHeader breadcrumb="Player profile" title="Player not found" icon="user" />
+        <Card className="mt-5 p-8"><EmptyState icon="user" title="Player not found"
+          description="This player may not be visible to your club or may not exist."
+          action={<Link to="/club/discovery"><Button icon="search">Back to discovery</Button></Link>} /></Card>
+      </div>
+    )
+  }
+
+  const p90 = per90(player.matchStats)
 
   return (
     <div>
@@ -43,16 +93,10 @@ export default function PlayerDetail() {
       </Link>
 
       <PageHeader breadcrumb="Player profile" title={`${player.first_name} ${player.last_name}`}
-        subtitle={`${player.position_primary} · ${player.age} yrs · ${player.clubName} · ${player.state_of_origin}`}
-        actions={
-          <>
-            <Button variant="outline" icon="list">Shortlist</Button>
-            <Button variant="outline" icon="target">Invite to trial</Button>
-            <Button icon="doc" onClick={() => setReportOpen(true)}>Scout report</Button>
-          </>
-        } />
+        subtitle={`${player.position_primary} · ${player.age} yrs · ${player.clubName ?? 'Unattached'} · ${player.state_of_origin ?? '—'}`}
+        actions={<Button icon="doc" onClick={() => setReportOpen(true)}>Scout report</Button>} />
 
-      {player.is_minor && <div className="mb-4"><MinorProtectionNotice guardianName={player.guardian_name} /></div>}
+      {player.is_minor && <div className="mb-4"><MinorProtectionNotice guardianName={player.guardian_name ?? undefined} /></div>}
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <div>
@@ -95,9 +139,9 @@ export default function PlayerDetail() {
                 <div className="grid gap-3 sm:grid-cols-4">
                   {[['Apps', player.matchStats.appearances], ['Goals', player.matchStats.goals],
                     ['Assists', player.matchStats.assists], ['Minutes', player.matchStats.minutes]].map(([l, v]) => (
-                    <div key={l as string} className="rounded-xl bg-ink-50 p-3 text-center">
-                      <p className="text-2xs font-bold uppercase tracking-wider text-ink-400">{l as string}</p>
-                      <p className="tnum font-display text-2xl">{v as number}</p>
+                    <div key={l} className="rounded-xl bg-ink-50 p-3 text-center">
+                      <p className="text-2xs font-bold uppercase tracking-wider text-ink-400">{l}</p>
+                      <p className="tnum font-display text-2xl">{v}</p>
                     </div>
                   ))}
                 </div>
@@ -108,9 +152,9 @@ export default function PlayerDetail() {
                     ['Interceptions per 90', p90.interceptions], ['Minutes per goal', p90.minutesPerGoal ?? '—'],
                     ['Yellow cards', player.matchStats.yellow_cards], ['Red cards', player.matchStats.red_cards],
                     ['Fouls committed', player.matchStats.fouls_committed]].map(([l, v]) => (
-                    <div key={l as string} className="flex items-center justify-between border-b border-ink-100 py-2.5">
-                      <span className="text-xs text-ink-600">{l as string}</span>
-                      <span className="tnum text-sm font-bold">{v as number}</span>
+                    <div key={l} className="flex items-center justify-between border-b border-ink-100 py-2.5">
+                      <span className="text-xs text-ink-600">{l}</span>
+                      <span className="tnum text-sm font-bold">{v}</span>
                     </div>
                   ))}
                 </div>
@@ -118,55 +162,36 @@ export default function PlayerDetail() {
             )}
 
             {tab === 'media' && (
-              <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-3">
-                {player.media.map(m => (
-                  <div key={m.id} className="overflow-hidden rounded-xl border border-ink-100">
-                    <div className="relative aspect-video bg-ink-900">
-                      <div className="absolute inset-0 bg-pitch bg-pitch opacity-40" />
-                      <div className="grid h-full w-full place-items-center text-white/40"><Icon name="video" size={22} /></div>
-                      {m.verified && (
-                        <span className="absolute left-2 top-2 rounded bg-trust-400 px-1.5 py-0.5 text-[9px] font-bold text-white">VERIFIED</span>
-                      )}
-                    </div>
-                    <div className="p-3">
-                      <p className="truncate text-xs font-bold">{m.title}</p>
-                      <p className="text-2xs text-ink-500">{m.recorded_location} · {formatDate(m.recorded_at!)}</p>
-                    </div>
+              player.media.length === 0
+                ? <div className="p-8"><EmptyState icon="video" title="No media yet"
+                    description="This player has not uploaded any highlight clips or photos." /></div>
+                : <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-3">
+                    {player.media.map(m => (
+                      <div key={m.id} className="overflow-hidden rounded-xl border border-ink-100">
+                        <div className="relative aspect-video bg-ink-900">
+                          {m.url ? (
+                            m.kind === 'photo'
+                              ? <img src={m.url} alt={m.title} className="h-full w-full object-cover" />
+                              : <video src={m.url} controls preload="metadata" className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="grid h-full w-full place-items-center text-white/40"><Icon name="video" size={22} /></div>
+                          )}
+                          {m.verified && (
+                            <span className="absolute left-2 top-2 rounded bg-trust-400 px-1.5 py-0.5 text-[9px] font-bold text-white">VERIFIED</span>
+                          )}
+                        </div>
+                        <div className="p-3">
+                          <p className="truncate text-xs font-bold">{m.title}</p>
+                          <p className="text-2xs text-ink-500">{m.recorded_location ?? 'Location not set'} · {formatDate(m.recorded_at ?? '')}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
             )}
 
             {tab === 'reports' && (
-              <div className="divide-y divide-ink-100">
-                {[
-                  { who: 'Scout M. Danjuma', when: '3 days ago', rec: 'trial', stars: 4,
-                    text: 'Strong in transition, reads the game well for his age. Left foot is a real weapon. Would like to see him against a more physical side before committing.' },
-                  { who: 'Coach A. Bello', when: '2 weeks ago', rec: 'monitor', stars: 3,
-                    text: 'Raw but the physical profile is excellent. Needs work on decision-making in the final third. Worth tracking through the season.' },
-                ].map(r => (
-                  <div key={r.who} className="p-5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-xs font-bold">{r.who}</p>
-                        <p className="text-2xs text-ink-400">{r.when}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="flex gap-0.5">
-                          {[1, 2, 3, 4, 5].map(s => (
-                            <Icon key={s} name="star-filled" size={13} filled
-                              className={s <= r.stars ? 'text-gold-400' : 'text-ink-200'} />
-                          ))}
-                        </span>
-                        <Badge tone={r.rec === 'sign' ? 'trust' : r.rec === 'trial' ? 'blue' : r.rec === 'monitor' ? 'gold' : 'red'} size="sm">
-                          {r.rec}
-                        </Badge>
-                      </div>
-                    </div>
-                    <p className="mt-2 text-sm leading-relaxed text-ink-700">{r.text}</p>
-                  </div>
-                ))}
-              </div>
+              <div className="p-8"><EmptyState icon="doc" title="No scout reports yet"
+                description="Your staff can file a report from the button above." /></div>
             )}
           </Card>
         </div>
@@ -190,31 +215,35 @@ export default function PlayerDetail() {
           <Card className="p-5">
             <h3 className="mb-3 text-sm font-bold">Development</h3>
             <div className="space-y-2.5">
-              {player.ratingSnapshots.slice(-5).map(s => (
-                <div key={s.id} className="flex items-center gap-3">
-                  <span className="w-14 shrink-0 text-2xs text-ink-400">{formatDate(s.recorded_at, { month: 'short', year: '2-digit' })}</span>
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink-100">
-                    <div className="h-full rounded-full bg-red-500" style={{ width: `${s.futweb_score}%` }} />
-                  </div>
-                  <span className="tnum w-6 text-right text-xs font-bold">{s.futweb_score}</span>
-                  <span className="w-16 truncate text-2xs text-ink-400">{s.rated_by}</span>
-                </div>
-              ))}
+              {player.ratingSnapshots.length === 0
+                ? <p className="text-xs text-ink-500">No rating history yet.</p>
+                : player.ratingSnapshots.slice(-5).map(s => (
+                    <div key={s.id} className="flex items-center gap-3">
+                      <span className="w-14 shrink-0 text-2xs text-ink-400">{formatDate(s.recorded_at, { month: 'short', year: '2-digit' })}</span>
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink-100">
+                        <div className="h-full rounded-full bg-red-500" style={{ width: `${s.futweb_score}%` }} />
+                      </div>
+                      <span className="tnum w-6 text-right text-xs font-bold">{s.futweb_score}</span>
+                      <span className="w-16 truncate text-2xs text-ink-400">{s.rated_by}</span>
+                    </div>
+                  ))}
             </div>
           </Card>
 
           <Card className="p-5">
             <h3 className="mb-3 text-sm font-bold">Career history</h3>
             <div className="space-y-2.5">
-              {player.career.map(c => (
-                <div key={c.id} className="flex items-center gap-2.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-bold">{c.club_name}</p>
-                    <p className="text-2xs text-ink-500">{c.season} · {c.appearances} apps · {c.goals} goals</p>
-                  </div>
-                  {c.verified ? <Badge tone="trust" size="sm">Verified</Badge> : <Badge tone="neutral" size="sm">Unverified</Badge>}
-                </div>
-              ))}
+              {player.career.length === 0
+                ? <p className="text-xs text-ink-500">No career entries recorded.</p>
+                : player.career.map(c => (
+                    <div key={c.id} className="flex items-center gap-2.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-bold">{c.club_name}</p>
+                        <p className="text-2xs text-ink-500">{c.season} · {c.appearances} apps · {c.goals} goals</p>
+                      </div>
+                      {c.verified ? <Badge tone="trust" size="sm">Verified</Badge> : <Badge tone="neutral" size="sm">Unverified</Badge>}
+                    </div>
+                  ))}
             </div>
           </Card>
         </div>
