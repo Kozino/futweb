@@ -87,7 +87,7 @@ function formFromPlayer(player: NonNullable<ReturnType<typeof usePlayer>['player
 function formatDate(value: string | null) {
   if (!value) return '—'
 
-  const date = new Date(`${value}T00:00:00`)
+  const date = new Date(value)
 
   if (Number.isNaN(date.getTime())) return value
 
@@ -527,10 +527,10 @@ export default function PlayerProfile() {
                         className="flex items-center gap-3 rounded-xl border border-ink-100 p-3"
                       >
                         <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-ink-900 text-2xs font-bold text-white">
-                          {initials(
-                            entry.club_name || 'Club',
-                            entry.season || '',
-                          )}
+                        {initials(
+  entry.club_name || 'Club',
+  entry.club_name || 'Club',
+)}
                         </div>
 
                         <div className="min-w-0 flex-1">
