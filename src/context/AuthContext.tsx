@@ -138,12 +138,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: input.email,
         password: input.password,
         options: {
-          data: {
-            full_name: input.fullName,
-            account_type: input.accountType,
-            club_name: input.clubName ?? null,
-            phone: input.phone ?? null,
-          },
+         data: {
+  full_name: input.fullName,
+  account_type: input.accountType,
+  club_name: input.clubName ?? null,
+  phone: input.phone ?? null,
+
+  player_details: input.playerDetails ?? null,
+  club_details: input.clubDetails ?? null,
+},
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       })
