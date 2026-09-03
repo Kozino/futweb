@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import { Badge, Button, Card, EmptyState, Icon, Input, Select } from '@/components/ui'
+import { Badge, Button, Card, EmptyState, Input, Select } from '@/components/ui'
 import { DEMO_CLUBS, DEMO_PLAYERS, enrichPlayer } from '@/data/mock'
 import { LEAGUES } from '@/lib/constants'
 import { POSITION_LIST } from '@/lib/ratings'
@@ -9,6 +9,17 @@ import { hasSupabase } from '@/lib/supabase'
 import { getPublicClubs, getPublicPlayers, type PublicClubRow, type PublicPlayerRow } from '@/lib/publicData'
 
 type Mode = 'players' | 'clubs'
+type ClubUnion = (typeof DEMO_CLUBS)[number] | PublicClubRow
+
+function clubState(c: ClubUnion) {
+  return 'state_region' in c ? c.state_region : c.state
+}
+function clubLeague(c: ClubUnion) {
+  return 'league_code' in c ? c.league_code : c.league
+}
+function clubVerified(c: ClubUnion) {
+  return 'entity_verified' in c ? c.entity_verified : c.verification_status === 'verified'
+}
 
 export default function TalentDirectory() {
   const [params] = useSearchParams()
@@ -35,7 +46,7 @@ export default function TalentDirectory() {
   const players = useMemo(() => remotePlayers
     ? remotePlayers.map(p => ({ ...p, clubName: p.club_name ?? 'Unattached', score: { current: p.futweb_score ?? 0, potential: p.potential ?? p.futweb_score ?? 0 }, confidence: { score: p.confidence ?? 0 } }))
     : demoPlayers, [remotePlayers, demoPlayers])
-  const clubs = remoteClubs ?? DEMO_CLUBS
+  const clubs: ClubUnion[] = remoteClubs ?? DEMO_CLUBS
   const playerResults = useMemo(() => players.filter(p => {
     const needle = q.trim().toLowerCase()
     if (needle && !`${p.first_name} ${p.last_name}`.toLowerCase().includes(needle)
@@ -51,9 +62,9 @@ export default function TalentDirectory() {
 
   const clubResults = useMemo(() => clubs.filter(c => {
     const needle = q.trim().toLowerCase()
-    if (needle && !`${c.name} ${c.city ?? ''} ${c.state ?? ''}`.toLowerCase().includes(needle)) return false
-    if (league && (('league_code' in c ? c.league_code : c.league) !== league)) return false
-    return 'entity_verified' in c ? c.entity_verified : c.verification_status === 'verified'
+    if (needle && !`${c.name} ${c.city ?? ''} ${clubState(c) ?? ''}`.toLowerCase().includes(needle)) return false
+    if (league && clubLeague(c) !== league) return false
+    return clubVerified(c)
   }), [clubs, q, league])
 
   const clear = () => { setQ(''); setPosition(''); setLeague(''); setAvailability('') }
@@ -107,7 +118,7 @@ export default function TalentDirectory() {
 
       <section className="fw-container py-10 sm:py-12">
         {loading ? (
-          <div className="grid gap-4 lg:grid-cols-2">{Array.from({ length: 4 }).map((_, i) => <Card key={i} className="h-32 animate-pulse bg-ink-50" />)}</div>
+          <div className="grid gap-4 lg:grid-cols-2">{Array.from({ length: 4 }).map((_, i) => <Card key={i} className="h-32 animate-pulse bg-ink-50">{null}</Card>)}</div>
         ) : mode === 'players' ? (
           playerResults.length ? (
             <div className="grid gap-4 lg:grid-cols-2">
@@ -141,7 +152,7 @@ export default function TalentDirectory() {
                 <Card key={c.id} hover className="p-5">
                   <div className="flex items-start justify-between gap-3"><div className="grid h-12 w-12 place-items-center rounded-xl bg-ink-900 text-xs font-extrabold text-white">{c.short_name}</div><Badge tone="trust" icon="shield" size="sm">Verified</Badge></div>
                   <Link to={`/clubs/${c.slug}`} className="mt-4 block text-base font-extrabold hover:text-red-600">{c.name}</Link>
-                  <p className="mt-1 text-xs text-ink-500">{c.city ?? ('state_region' in c ? c.state_region : c.state) ?? c.country} · {LEAGUES.find(l => l.value === ('league_code' in c ? c.league_code : c.league))?.label ?? ('league_code' in c ? c.league_code : c.league) ?? 'Football club'}</p>
+                  <p className="mt-1 text-xs text-ink-500">{c.city ?? clubState(c) ?? c.country} · {LEAGUES.find(l => l.value === clubLeague(c))?.label ?? clubLeague(c) ?? 'Football club'}</p>
                   <div className="mt-4 grid grid-cols-2 gap-2"><div className="rounded-xl bg-ink-50 p-3"><p className="text-2xs uppercase tracking-wider text-ink-400">Verified</p><p className="font-display text-xl text-trust-600">Yes</p></div><div className="rounded-xl bg-ink-50 p-3"><p className="text-2xs uppercase tracking-wider text-ink-400">Founded</p><p className="font-display text-xl">{c.founded_year ?? '—'}</p></div></div>
                   <Link to={`/clubs/${c.slug}`} className="mt-4 block"><Button fullWidth variant="outline" size="sm" iconRight="arrow-right">View club</Button></Link>
                 </Card>
