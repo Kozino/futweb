@@ -181,7 +181,7 @@ export async function completePlayerOnboarding(
       p_guardian_name: input.guardianName ?? null,
       p_guardian_phone: input.guardianPhone ?? null,
       p_guardian_email: input.guardianEmail ?? null,
-      p_guardian_consent: input.guardianConsent ?? false,
+    p_guardian_consent_at: input.guardianConsent ? new Date().toISOString() : null,
     },
   )
 
