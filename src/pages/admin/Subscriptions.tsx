@@ -1,20 +1,57 @@
+import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Button, Card, Stat, toast } from '@/components/ui'
-import { PLANS } from '@/lib/constants'
+import { Badge, Button, Card, Skeleton, Stat, toast } from '@/components/ui'
+import { supabase } from '@/lib/supabase'
 import { formatNGN, relativeTime } from '@/lib/utils'
 
-const SUBS = [
-  { id: '1', org: 'Rivers United FC', plan: 'club_pro', status: 'active', mrr: 75000, renews: new Date(Date.now() + 9 * 86400000).toISOString(), seats: '42 / 250' },
-  { id: '2', org: 'Enyimba International', plan: 'club_enterprise', status: 'active', mrr: 300000, renews: new Date(Date.now() + 21 * 86400000).toISOString(), seats: '38 / ∞' },
-  { id: '3', org: 'Kano Pillars FC', plan: 'club_academy', status: 'active', mrr: 25000, renews: new Date(Date.now() + 3 * 86400000).toISOString(), seats: '31 / 50' },
-  { id: '4', org: 'Golden Boot Academy', plan: 'club_academy', status: 'past_due', mrr: 25000, renews: new Date(Date.now() - 2 * 86400000).toISOString(), seats: '64 / 50' },
-  { id: '5', org: 'Lagos Talent Hub', plan: 'player_pro', status: 'cancelled', mrr: 0, renews: new Date(Date.now() - 14 * 86400000).toISOString(), seats: '—' },
-]
+interface SubRow {
+  id: string; subscriber: string; plan_code: string
+  status: 'trialing' | 'active' | 'past_due' | 'grace' | 'cancelled' | 'expired' | 'paused'
+  current_period_end: string | null; trial_ends_at: string | null; seats_used: number
+  orgName?: string; planName?: string; priceNgn?: number
+}
 
-const STATUS_TONE = { active: 'trust', past_due: 'warn', grace: 'gold', cancelled: 'neutral', expired: 'red', trialing: 'blue', paused: 'neutral' } as const
+const STATUS_TONE = {
+  active: 'trust', past_due: 'warn', grace: 'gold', cancelled: 'neutral',
+  expired: 'red', trialing: 'blue', paused: 'neutral',
+} as const
 
 export default function Subscriptions() {
-  const mrr = SUBS.reduce((s, x) => s + x.mrr, 0)
+  const [loading, setLoading] = useState(true)
+  const [subs, setSubs] = useState<SubRow[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data: rows, error } = await supabase.from('subscriptions').select('*').order('created_at', { ascending: false })
+      if (error) { toast({ tone: 'error', title: 'Could not load subscriptions', description: error.message }); setLoading(false); return }
+      const list = rows ?? []
+      const subscriberIds = [...new Set(list.map(s => s.subscriber))]
+      const planCodes = [...new Set(list.map(s => s.plan_code))]
+      const [profilesRes, plansRes] = await Promise.all([
+        subscriberIds.length ? supabase.from('profiles').select('id, full_name, club_name').in('id', subscriberIds) : Promise.resolve({ data: [] as { id: string; full_name: string; club_name: string | null }[] }),
+        planCodes.length ? supabase.from('plans').select('code, name, price_ngn').in('code', planCodes) : Promise.resolve({ data: [] as { code: string; name: string; price_ngn: number }[] }),
+      ])
+      const orgById = Object.fromEntries((profilesRes.data ?? []).map(p => [p.id, p.club_name || p.full_name]))
+      const planByCode = Object.fromEntries((plansRes.data ?? []).map(p => [p.code, p]))
+      if (!cancelled) {
+        setSubs(list.map(s => ({
+          ...s,
+          orgName: orgById[s.subscriber] ?? 'Unknown account',
+          planName: planByCode[s.plan_code]?.name ?? s.plan_code,
+          priceNgn: planByCode[s.plan_code]?.price_ngn ?? 0,
+        })))
+        setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  const mrr = useMemo(() => subs
+    .filter(s => s.status === 'active' || s.status === 'trialing')
+    .reduce((sum, s) => sum + (s.priceNgn ?? 0), 0), [subs])
+
+  if (loading) return <Skeleton className="h-64 w-full" />
 
   return (
     <div>
@@ -22,36 +59,37 @@ export default function Subscriptions() {
         subtitle="Billing runs through Flutterwave. Webhook events are idempotent and deduplicated." />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="MRR" value={formatNGN(mrr, { compact: true })} icon="card" tone="trust" trend={15} />
-        <Stat label="Active subscriptions" value={SUBS.filter(s => s.status === 'active').length} icon="check" />
-        <Stat label="Past due" value={SUBS.filter(s => s.status === 'past_due').length} icon="alert" tone="red" />
-        <Stat label="Churn (30d)" value="2.1%" icon="trending" tone="trust" />
+        <Stat label="MRR" value={formatNGN(mrr, { compact: true })} icon="card" tone="trust" />
+        <Stat label="Active subscriptions" value={subs.filter(s => s.status === 'active').length} icon="check" />
+        <Stat label="Past due" value={subs.filter(s => s.status === 'past_due').length} icon="alert" tone="red" />
+        <Stat label="Grace period" value={subs.filter(s => s.status === 'grace').length} icon="alert" tone="gold" />
       </div>
 
       <Card className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[820px] text-sm">
           <thead>
             <tr className="border-b border-ink-100 text-left">
-              {['Organisation', 'Plan', 'Status', 'MRR', 'Seats used', 'Renews', ''].map(h => (
+              {['Account', 'Plan', 'Status', 'MRR', 'Seats used', 'Renews', ''].map(h => (
                 <th key={h} className="px-4 py-3 text-2xs font-bold uppercase tracking-wider text-ink-400">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-ink-100">
-            {SUBS.map(s => (
+            {subs.map(s => (
               <tr key={s.id} className="hover:bg-ink-50">
-                <td className="px-4 py-3 font-semibold">{s.org}</td>
-                <td className="px-4 py-3">
-                  <Badge tone="neutral" size="sm">{PLANS.find(p => p.code === s.plan)?.name ?? s.plan}</Badge>
+                <td className="px-4 py-3 font-semibold">{s.orgName}</td>
+                <td className="px-4 py-3"><Badge tone="neutral" size="sm">{s.planName}</Badge></td>
+                <td className="px-4 py-3"><Badge tone={STATUS_TONE[s.status]} size="sm">{s.status.replace('_', ' ')}</Badge></td>
+                <td className="tnum px-4 py-3 font-bold">
+                  {(s.status === 'active' || s.status === 'trialing') && s.priceNgn ? formatNGN(s.priceNgn) : '—'}
+                </td>
+                <td className="tnum px-4 py-3 text-xs text-ink-600">{s.seats_used}</td>
+                <td className="px-4 py-3 text-xs text-ink-500">
+                  {relativeTime(s.status === 'trialing' ? (s.trial_ends_at ?? s.current_period_end ?? '') : (s.current_period_end ?? ''))}
                 </td>
                 <td className="px-4 py-3">
-                  <Badge tone={STATUS_TONE[s.status as keyof typeof STATUS_TONE]} size="sm">{s.status.replace('_', ' ')}</Badge>
-                </td>
-                <td className="tnum px-4 py-3 font-bold">{s.mrr ? formatNGN(s.mrr) : '—'}</td>
-                <td className="tnum px-4 py-3 text-xs text-ink-600">{s.seats}</td>
-                <td className="px-4 py-3 text-xs text-ink-500">{relativeTime(s.renews)}</td>
-                <td className="px-4 py-3">
-                  <Button size="sm" variant="ghost" onClick={() => toast({ tone: 'info', title: 'Subscription actions', description: 'Refund, pause, change plan or extend grace.' })}>
+                  <Button size="sm" variant="ghost"
+                    onClick={() => toast({ tone: 'info', title: 'Subscription actions', description: 'Refund, pause, change plan or extend grace — wire to your Flutterwave endpoints.' })}>
                     Manage
                   </Button>
                 </td>
@@ -60,19 +98,6 @@ export default function Subscriptions() {
           </tbody>
         </table>
       </Card>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        {[
-          ['Idempotent webhooks', 'Flutterwave retries are deduplicated by transaction reference, so a dropped response can never double-bill.'],
-          ['Grace period', 'Failed payments enter a 7-day grace state before access is restricted. Players and clubs are notified daily.'],
-          ['Local payment methods', 'Cards, bank transfer and USSD in naira. USD billing available for clubs abroad.'],
-        ].map(([t, d]) => (
-          <Card key={t} className="p-4">
-            <p className="text-xs font-bold">{t}</p>
-            <p className="mt-1 text-2xs leading-relaxed text-ink-600">{d}</p>
-          </Card>
-        ))}
-      </div>
     </div>
   )
 }
