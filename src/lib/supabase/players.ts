@@ -119,6 +119,16 @@ export async function updateMyPlayerProfile(
     Object.entries(allowed).filter(([, value]) => value !== undefined),
   )
 
+  if (Object.keys(update).length === 0) {
+    const existing = await getMyPlayer(userId)
+
+    if (!existing) {
+      throw new Error('Player profile not found.')
+    }
+
+    return existing
+  }
+
   const { data, error } = await client
     .from('players')
     .update(update)
@@ -145,7 +155,7 @@ export interface CompletePlayerOnboardingInput {
   guardianName?: string | null
   guardianPhone?: string | null
   guardianEmail?: string | null
-  guardianConsentAt?: string | null
+  guardianConsent?: boolean
 }
 
 export async function completePlayerOnboarding(
@@ -170,7 +180,7 @@ export async function completePlayerOnboarding(
       p_guardian_name: input.guardianName ?? null,
       p_guardian_phone: input.guardianPhone ?? null,
       p_guardian_email: input.guardianEmail ?? null,
-      p_guardian_consent_at: input.guardianConsentAt ?? null,
+      p_guardian_consent: input.guardianConsent ?? false,
     },
   )
 
