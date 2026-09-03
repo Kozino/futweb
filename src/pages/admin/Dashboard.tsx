@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Button, Card, CardHeader, Icon, ProgressBar, Skeleton, Stat } from '@/components/ui'
+import { Badge, Button, Card, CardHeader, Icon, Skeleton, Stat } from '@/components/ui'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { formatNGN, relativeTime } from '@/lib/utils'
@@ -20,19 +20,21 @@ export default function AdminDashboard() {
   const [audit, setAudit] = useState<AuditRow[]>([])
 
   useEffect(() => {
+    if (!supabase) { setLoading(false); return }
+    const client = supabase
     let cancelled = false
     ;(async () => {
       const [
         clubsCountRes, playersCountRes, pendingClubsRes,
         disputesRes, subsRes, auditRes,
       ] = await Promise.all([
-        supabase.from('clubs').select('*', { count: 'exact', head: true }),
-        supabase.from('players').select('*', { count: 'exact', head: true }),
-        supabase.from('clubs').select('id, name, short_name, state_region, entity_verified')
+        client.from('clubs').select('*', { count: 'exact', head: true }),
+        client.from('players').select('*', { count: 'exact', head: true }),
+        client.from('clubs').select('id, name, short_name, state_region, entity_verified')
           .eq('entity_verified', false).order('created_at', { ascending: false }).limit(4),
-        supabase.from('disputes').select('*', { count: 'exact', head: true }).eq('status', 'open'),
-        supabase.from('subscriptions').select('plan_code, status'),
-        supabase.from('audit_log').select('id, action, actor_role, created_at')
+        client.from('disputes').select('*', { count: 'exact', head: true }).eq('status', 'open'),
+        client.from('subscriptions').select('plan_code, status'),
+        client.from('audit_log').select('id, action, actor_role, created_at')
           .order('created_at', { ascending: false }).limit(5),
       ])
       if (cancelled) return
@@ -49,7 +51,7 @@ export default function AdminDashboard() {
       setActiveSubs(active.length)
       if (active.length) {
         const codes = [...new Set(active.map(s => s.plan_code))]
-        const { data: plans } = await supabase.from('plans').select('code, price_ngn').in('code', codes)
+        const { data: plans } = await client.from('plans').select('code, price_ngn').in('code', codes)
         const priceByCode = Object.fromEntries((plans ?? []).map(p => [p.code, p.price_ngn]))
         setMrr(active.reduce((sum, s) => sum + (priceByCode[s.plan_code] ?? 0), 0))
       }
