@@ -70,17 +70,48 @@ export default function Register() {
     return Object.keys(e).length === 0
   }
 
-  async function submit() {
-    setLoading(true)
-    const { error } = await signUp({
-      email: form.email, password: form.password, accountType: type!,
-      fullName: form.fullName, clubName: type === 'club' ? form.clubName : undefined, phone: form.phone,
-    })
-    setLoading(false)
-    if (error) { setErrors({ email: error }); return }
-    nav(type === 'club' ? '/onboarding/club' : '/onboarding/player')
+ async function submit() {
+  setLoading(true)
+
+  const { error } = await signUp({
+    email: form.email,
+    password: form.password,
+    accountType: type!,
+    fullName: form.fullName,
+    clubName: type === 'club' ? form.clubName : undefined,
+    phone: form.phone,
+
+    playerDetails: type === 'player'
+      ? {
+          dob: form.dob,
+          position: form.position,
+          foot: form.foot,
+          height: form.height,
+          weight: form.weight,
+          nationality: form.country,
+          stateOfOrigin: form.state,
+        }
+      : undefined,
+
+    clubDetails: type === 'club'
+      ? {
+          shortName: form.clubShort,
+          country: form.country,
+          stateRegion: form.state,
+          leagueCode: form.league,
+        }
+      : undefined,
+  })
+
+  setLoading(false)
+
+  if (error) {
+    setErrors({ email: error })
+    return
   }
 
+  nav(type === 'club' ? '/onboarding/club' : '/onboarding/player')
+}
   return (
     <div className="min-h-screen bg-ink-50/60">
       <div className="flex min-h-screen flex-col">
