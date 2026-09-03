@@ -139,6 +139,7 @@ export const NAV_BY_ROLE = {
     { label: 'Trials', to: '/club/trials', icon: 'target' },
     { label: 'Reports', to: '/club/reports', icon: 'doc' },
     { label: 'Staff', to: '/club/staff', icon: 'shield' },
+    { label: 'Verification', to: '/club/verify', icon: 'building' },
     { label: 'Billing', to: '/billing', icon: 'card' },
   ],
   admin: [
