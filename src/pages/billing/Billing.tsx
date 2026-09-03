@@ -5,7 +5,7 @@ import { Badge, Button, Card, Icon, Tabs, Toggle, toast } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
 import { ANNUAL_DISCOUNT_MONTHS, PLANS, annualPrice } from '@/lib/constants'
 import { cn, formatNGN } from '@/lib/utils'
-import { hasSupabase } from '@/lib/supabase'
+import { hasSupabase, supabase } from '@/lib/supabase'
 
 /**
  * Flutterwave integration surface.
@@ -35,16 +35,60 @@ export default function Billing() {
 
   async function subscribe(planCode: string) {
     setLoading(planCode)
-    // Demo mode: simulate the round-trip. With Supabase configured this calls
-    // the create-checkout edge function and hands off to Flutterwave Inline.
-    await new Promise(r => setTimeout(r, 900))
-    if (hasSupabase) {
-      window.location.assign(`/functions/v1/create-checkout?plan=${planCode}&interval=${annual ? 'annual' : 'monthly'}`)
-      return
+    try {
+      // Demo mode: simulate the round-trip locally.
+      if (!hasSupabase || !supabase) {
+        await new Promise(r => setTimeout(r, 900))
+        updateUser({ subStatus: 'active', planCode })
+        setLoading(null)
+        toast({ tone: 'success', title: 'Subscription active', description: 'You now have full access.' })
+        return
+      }
+
+      // Real flow: ask the create-checkout edge function (which resolves the
+      // authenticated user from the JWT and never trusts a client amount) for
+      // a Flutterwave payment link, then hand the browser off to it. We POST a
+      // JSON body — never a GET to a relative path, which is what made the
+      // browser fall back to the SPA homepage before.
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: {
+          plan_code: planCode,
+          interval: annual ? 'annual' : 'monthly',
+          currency: 'NGN',
+        },
+      })
+
+      if (error) {
+        throw new Error(error.message || 'Could not start checkout.')
+      }
+
+      const paymentLink: string | undefined =
+        (data as { payment_link?: string })?.payment_link
+
+      if (!paymentLink) {
+        const msg =
+          (data as { error?: string })?.error ??
+          'This plan is free — no checkout required.'
+        if (msg.toLowerCase().includes('free')) {
+          updateUser({ subStatus: 'active', planCode })
+          toast({ tone: 'success', title: 'Plan activated', description: msg })
+        } else {
+          toast({ tone: 'error', title: 'Checkout failed', description: msg })
+        }
+        setLoading(null)
+        return
+      }
+
+      // Redirect to Flutterwave's hosted checkout (card / transfer / USSD).
+      window.location.href = paymentLink
+    } catch (err) {
+      setLoading(null)
+      toast({
+        tone: 'error',
+        title: 'Could not start checkout',
+        description: err instanceof Error ? err.message : 'Please try again.',
+      })
     }
-    updateUser({ subStatus: 'active', planCode })
-    setLoading(null)
-    toast({ tone: 'success', title: 'Subscription active', description: 'You now have full access.' })
   }
 
   return (
