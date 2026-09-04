@@ -32,6 +32,9 @@ interface AuthState {
   signOut: () => Promise<void>
   updateUser: (patch: Partial<SessionUser>) => void
   demoLogin: (role: 'player' | 'club' | 'admin') => void
+  /** Re-fetch the caller's profile row from Supabase and sync local state —
+   *  used to reflect a subscription/verification change made server-side. */
+  refreshProfile: () => Promise<void>
 }
 
 interface SignUpInput {
@@ -191,13 +194,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     persist(presets[role].session)
   }, [persist])
 
+  const refreshProfile = useCallback(async () => {
+    if (!hasSupabase || !supabase) return
+    const { data: sessionData } = await supabase.auth.getSession()
+    const session = sessionData.session
+    if (!session) return
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', session.user.id)
+      .single()
+    if (profile) setUser(mapProfile(profile, session.user.email ?? ''))
+  }, [])
+
   const hasAccess = useMemo(
     () => !!user && ACCESS_STATES.includes(user.subStatus),
     [user],
   )
 
-  const value = useMemo(() => ({ user, loading, hasAccess, signIn, signUp, signOut, updateUser, demoLogin }),
-    [user, loading, hasAccess, signIn, signUp, signOut, updateUser, demoLogin])
+  const value = useMemo(() => ({ user, loading, hasAccess, signIn, signUp, signOut, updateUser, demoLogin, refreshProfile }),
+    [user, loading, hasAccess, signIn, signUp, signOut, updateUser, demoLogin, refreshProfile])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
