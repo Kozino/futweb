@@ -7,8 +7,9 @@
  * Security properties this handler must maintain:
  *
  *  1. SIGNATURE VERIFICATION. Flutterwave signs the raw request body with
- *     HMAC-SHA512 using the secret hash set in the dashboard. We recompute it
- *     and compare in constant time. Without this, anyone could POST
+ *     HMAC-SHA256 using the secret hash set in the dashboard, base64-encoded,
+ *     and sent in the `flutterwave-signature` header. We recompute it and
+ *     compare in constant time. Without this, anyone could POST
  *     "payment successful" and get a free subscription.
  *
  *  2. IDEMPOTENCY. Flutterwave retries until it sees a 2xx. We key everything
@@ -43,16 +44,21 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0
 }
 
+/**
+ * Flutterwave hashes the raw webhook body with HMAC-SHA256 using your
+ * dashboard secret hash, then base64-encodes the digest and sends it in the
+ * `flutterwave-signature` header. See:
+ * https://developer.flutterwave.com/docs/webhooks#verifying-webhook-signatures
+ */
 async function verifySignature(rawBody: string, provided: string | null): Promise<boolean> {
   if (!provided) return false
   const key = await crypto.subtle.importKey(
     'raw', new TextEncoder().encode(SECRET_HASH),
-    { name: 'HMAC', hash: 'SHA-512' }, false, ['sign'],
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
   )
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(rawBody))
-  const computed = Array.from(new Uint8Array(sig))
-    .map(b => b.toString(16).padStart(2, '0')).join('')
-  return timingSafeEqual(computed, provided.toLowerCase())
+  const computed = btoa(String.fromCharCode(...new Uint8Array(sig)))
+  return timingSafeEqual(computed, provided)
 }
 
 /* --------------------------------- audit --------------------------------- */
@@ -79,10 +85,7 @@ Deno.serve(async (req) => {
   // The signature covers the EXACT raw bytes. Read the body once, as text.
   const raw = await req.text()
 
-  const provided =
-    req.headers.get('verif-hash') ??
-    req.headers.get('x-flutterwave-signature') ??
-    req.headers.get('x-futweb-signature')
+  const provided = req.headers.get('flutterwave-signature')
 
   if (!(await verifySignature(raw, provided))) {
     await audit('webhook.signature_invalid', null, { ip, hadHeader: Boolean(provided) })
@@ -97,8 +100,8 @@ Deno.serve(async (req) => {
     return json({ error: 'Invalid JSON' }, 400)
   }
 
-  const eventType = String(event.event ?? event['event.type'] ?? '')
-  // Flutterwave sends either { event, data } or { "event.type", ... }
+  const eventType = String(event.event ?? event['event.type'] ?? event.type ?? '')
+  // Flutterwave sends either { event, data } or { "type", data } depending on version.
   const data = (event.data ?? event) as Record<string, unknown>
 
   if (!/charge\.completed|transfer\.completed/.test(eventType) && eventType !== '') {
@@ -106,14 +109,14 @@ Deno.serve(async (req) => {
     return json({ status: 'ignored', event: eventType })
   }
 
-  const txRef = String(data.tx_ref ?? '')
+  const txRef = String(data.tx_ref ?? data.reference ?? '')
   if (!txRef) return json({ error: 'Missing tx_ref' }, 400)
 
   const status = String(data.status ?? '').toLowerCase()
   const flwId = data.id != null ? String(data.id) : null
   const amount = Number(data.amount ?? 0)
   const currency = String(data.currency ?? 'NGN')
-  const channel = String(data.payment_type ?? data.auth_model ?? 'unknown')
+  const channel = String(data.payment_type ?? data.auth_model ?? (data.payment_method as any)?.type ?? 'unknown')
 
   // Only our own reference format ever gets processed.
   if (!/^FW-[A-Z0-9]{6,}-\d{6,}$/.test(txRef)) {
@@ -122,7 +125,7 @@ Deno.serve(async (req) => {
   }
 
   /* ---- success path ---- */
-  if (status === 'successful') {
+  if (status === 'successful' || status === 'succeeded') {
     const { data: sub, error } = await admin.rpc('activate_subscription', {
       p_tx_ref: txRef,
       p_flw_id: flwId,
