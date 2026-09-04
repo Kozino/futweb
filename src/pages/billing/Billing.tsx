@@ -1,37 +1,90 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Button, Card, Icon, Tabs, Toggle, toast } from '@/components/ui'
+import { Badge, Button, Card, EmptyState, Icon, Skeleton, Tabs, Toggle, toast } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
 import { ANNUAL_DISCOUNT_MONTHS, PLANS, annualPrice } from '@/lib/constants'
-import { cn, formatNGN } from '@/lib/utils'
+import { cn, formatDate, formatNGN } from '@/lib/utils'
 import { hasSupabase, supabase } from '@/lib/supabase'
+import { getMyPayments, getMySubscription, type PaymentRow } from '@/lib/supabase/billing'
 
-/**
- * Flutterwave integration surface.
- *
- * In production this page initialises Flutterwave Inline via the checkout URL
- * returned by the `create-checkout` edge function — the API secret never
- * reaches the browser. The flow:
- *
- *   1. Client POSTs { plan_code, interval } to /functions/v1/create-checkout
- *   2. Edge function resolves the authenticated user from the JWT (never trusts
- *      a client-supplied user id), verifies plan/price server-side, creates a
- *      pending `payments` row with a unique tx_ref, and returns a payment link.
- *   3. Flutterwave redirects back to /billing?status=successful&tx_ref=...
- *   4. The webhook handler verifies the secret hash, then marks the payment
- *      paid and activates the subscription. Idempotent on tx_ref.
- */
+const CHANNEL_LABEL: Record<string, string> = {
+  card: 'Card',
+  banktransfer: 'Bank transfer',
+  ussd: 'USSD',
+  account: 'Account transfer',
+  mobilemoney: 'Mobile money',
+  payattitude: 'PayAttitude',
+  unknown: '—',
+}
+
+function channelLabel(channel: string | null): string {
+  if (!channel) return '—'
+  return CHANNEL_LABEL[channel.toLowerCase()] ?? channel
+}
+
 export default function Billing() {
-  const { user, updateUser } = useAuth()
-  const [params] = useSearchParams()
+  const { user, updateUser, refreshProfile } = useAuth()
+  const [params, setParams] = useSearchParams()
   const planParam = params.get('plan')
   const [tab, setTab] = useState<'plans' | 'history' | 'settings'>('plans')
   const [annual, setAnnual] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
 
+  // Real payment history state
+  const [payments, setPayments] = useState<PaymentRow[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+
   const audience = user?.accountType === 'club' ? 'club' : 'player'
   const plans = PLANS.filter(p => (p.audience === audience || p.audience === 'both') && p.price_ngn > 0)
+
+  function planName(code: string | null) {
+    if (!code) return '—'
+    return PLANS.find(p => p.code === code)?.name ?? code
+  }
+
+  // On mount (and when we come back from a checkout redirect) re-sync the real
+  // subscription status from the DB and load real payment history.
+  useEffect(() => {
+    const txRef = params.get('tx_ref')
+    const status = params.get('status')
+    if (status === 'successful' && txRef) {
+      toast({ tone: 'success', title: 'Payment received', description: 'Confirming your subscription…' })
+      // Clean the query string so a refresh doesn't re-toast.
+      const next = new URLSearchParams(params)
+      next.delete('status'); next.delete('tx_ref')
+      setParams(next, { replace: true })
+    }
+    void syncFromBackend()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function syncFromBackend() {
+    if (!hasSupabase || !supabase || !user?.id) return
+    setHistoryLoading(true)
+    try {
+      // Re-fetch profile so sub_status/plan reflect a just-settled webhook.
+      await refreshProfile()
+      const [pays, sub] = await Promise.all([
+        getMyPayments(user.id),
+        getMySubscription(user.id),
+      ])
+      setPayments(pays)
+      // Keep local state consistent with the server subscription if present.
+      if (sub) {
+        const pl = PLANS.find(p => p.code === sub.plan_code)
+        updateUser({
+          subStatus: sub.status as never,
+          planCode: sub.plan_code,
+        })
+        if (pl) updateUser({ planCode: pl.code })
+      }
+    } catch (err) {
+      toast({ tone: 'error', title: 'Could not load billing data', description: err instanceof Error ? err.message : 'Please try again.' })
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
 
   async function subscribe(planCode: string) {
     setLoading(planCode)
@@ -45,11 +98,6 @@ export default function Billing() {
         return
       }
 
-      // Real flow: ask the create-checkout edge function (which resolves the
-      // authenticated user from the JWT and never trusts a client amount) for
-      // a Flutterwave payment link, then hand the browser off to it. We POST a
-      // JSON body — never a GET to a relative path, which is what made the
-      // browser fall back to the SPA homepage before.
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: {
           plan_code: planCode,
@@ -91,13 +139,20 @@ export default function Billing() {
     }
   }
 
+  const isActive = user?.subStatus === 'active'
+
   return (
     <div>
       <PageHeader breadcrumb="Account" icon="card" title="Billing & subscription"
         subtitle="Pay in naira via Flutterwave — card, bank transfer or USSD."
-        actions={<Badge tone={user?.subStatus === 'active' ? 'trust' : 'gold'}>
-          {user?.subStatus === 'active' ? 'Active' : `Trial · ${user?.trialEndsAt ? Math.max(0, Math.ceil((+new Date(user.trialEndsAt) - Date.now()) / 86400000)) : 0} days left`}
-        </Badge>} />
+        actions={
+          <div className="flex items-center gap-2">
+            {isActive && <Button size="sm" variant="ghost" icon="refresh" onClick={() => void syncFromBackend()} />}
+            <Badge tone={isActive ? 'trust' : 'gold'}>
+              {isActive ? 'Active' : `Trial · ${user?.trialEndsAt ? Math.max(0, Math.ceil((+new Date(user.trialEndsAt) - Date.now()) / 86400000)) : 0} days left`}
+            </Badge>
+          </div>
+        } />
 
       <Tabs value={tab} onChange={setTab} tabs={[
         { value: 'plans', label: 'Plans', icon: 'card' },
@@ -109,8 +164,8 @@ export default function Billing() {
         <div className="mt-5">
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <Toggle checked={annual} onChange={setAnnual} label={`Annual billing — save ${ANNUAL_DISCOUNT_MONTHS} months (17%)`} />
-            {user?.planCode && <span className="text-xs text-ink-500">
-              Current plan: <strong className="font-bold">{PLANS.find(p => p.code === user.planCode)?.name}</strong>
+            {user?.planCode && isActive && <span className="text-xs text-ink-500">
+              Current plan: <strong className="font-bold">{planName(user.planCode)}</strong>
             </span>}
           </div>
 
@@ -143,10 +198,10 @@ export default function Billing() {
                     ))}
                   </ul>
                   <Button className="mt-5" fullWidth loading={loading === p.code}
-                    disabled={isCurrent && user?.subStatus === 'active'}
+                    disabled={isCurrent && isActive}
                     variant={p.featured || planParam === p.code ? 'primary' : 'outline'}
                     onClick={() => subscribe(p.code)}>
-                    {isCurrent && user?.subStatus === 'active' ? 'Current plan' : 'Subscribe'}
+                    {isCurrent && isActive ? 'Current plan' : 'Subscribe'}
                   </Button>
                 </Card>
               )
@@ -171,30 +226,41 @@ export default function Billing() {
 
       {tab === 'history' && (
         <Card className="mt-5 overflow-x-auto">
-          <table className="w-full min-w-[620px] text-sm">
-            <thead>
-              <tr className="border-b border-ink-100 text-left">
-                {['Date', 'Description', 'Reference', 'Method', 'Amount', 'Status'].map(h => (
-                  <th key={h} className="px-4 py-3 text-2xs font-bold uppercase tracking-wider text-ink-400">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-ink-100">
-              {[
-                ['12 Aug 2025', 'Pro Club — monthly', 'FW-TX-88213', 'Card •••• 4242', formatNGN(75000), 'Successful'],
-                ['12 Jul 2025', 'Pro Club — monthly', 'FW-TX-81004', 'Bank transfer', formatNGN(75000), 'Successful'],
-                ['12 Jun 2025', 'Pro Club — monthly', 'FW-TX-73991', 'Card •••• 4242', formatNGN(75000), 'Successful'],
-              ].map(r => (
-                <tr key={r[2] as string} className="hover:bg-ink-50">
-                  {r.map((c, i) => (
-                    <td key={i} className={cn('px-4 py-3 text-xs', i === 4 ? 'tnum font-bold' : i === 5 ? '' : 'text-ink-600')}>
-                      {i === 5 ? <Badge tone="trust" size="sm">{c as string}</Badge> : c as string}
-                    </td>
+          {!hasSupabase ? (
+            <div className="p-8"><EmptyState icon="doc" title="Payment history unavailable in demo mode"
+              description="Connect the app to Supabase to see your real payment history." /></div>
+          ) : historyLoading ? (
+            <div className="p-6"><Skeleton className="h-32 w-full" /></div>
+          ) : payments.length === 0 ? (
+            <div className="p-8"><EmptyState icon="doc" title="No payments yet"
+              description="When you complete a checkout, your payments and subscription status will appear here." /></div>
+          ) : (
+            <table className="w-full min-w-[680px] text-sm">
+              <thead>
+                <tr className="border-b border-ink-100 text-left">
+                  {['Date', 'Plan', 'Reference', 'Method', 'Amount', 'Status'].map(h => (
+                    <th key={h} className="px-4 py-3 text-2xs font-bold uppercase tracking-wider text-ink-400">{h}</th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-ink-100">
+                {payments.map(p => (
+                  <tr key={p.id} className="hover:bg-ink-50">
+                    <td className="px-4 py-3 text-xs text-ink-600">{formatDate(p.created_at)}</td>
+                    <td className="px-4 py-3 text-xs font-semibold text-ink-800">{planName(p.plan_code)}</td>
+                    <td className="px-4 py-3 text-xs text-ink-500">{p.tx_ref}</td>
+                    <td className="px-4 py-3 text-xs text-ink-600">{channelLabel(p.channel)}</td>
+                    <td className="tnum px-4 py-3 text-xs font-bold text-ink-900">{formatNGN(p.amount)} {p.currency}</td>
+                    <td className="px-4 py-3">
+                      <Badge tone={p.status === 'successful' ? 'trust' : p.status === 'pending' ? 'gold' : 'red'} size="sm">
+                        {p.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </Card>
       )}
 
@@ -205,8 +271,6 @@ export default function Billing() {
             <p className="mt-1 text-xs text-ink-500">Receipts and renewal notices go here.</p>
             <div className="mt-4 space-y-3">
               <input className="fw-input" defaultValue={user?.email} />
-              <input className="fw-input" placeholder="Billing address (optional)" />
-              <input className="fw-input" placeholder="TIN / VAT number (optional)" />
             </div>
             <Button className="mt-4" size="sm">Save</Button>
           </Card>
@@ -214,17 +278,12 @@ export default function Billing() {
           <Card className="p-5">
             <h3 className="text-sm font-bold">Subscription controls</h3>
             <p className="mt-1 text-xs text-ink-500">
-              Cancelling keeps access until the end of the current period.
+              {isActive
+                ? `Your ${planName(user?.planCode ?? null)} plan is active.`
+                : 'You are not on a paid plan yet.'}
             </p>
             <div className="mt-4 space-y-2.5">
-              <Button variant="outline" fullWidth icon="refresh">Change plan</Button>
-              <Button variant="outline" fullWidth onClick={() => toast({ tone: 'info', title: 'Auto-renew paused', description: 'Access continues until the period ends.' })}>
-                Pause auto-renew
-              </Button>
-              <Button variant="outline" fullWidth className="text-red-600" icon="x-circle"
-                onClick={() => toast({ tone: 'info', title: 'Cancellation scheduled', description: 'You keep access until the end of the period.' })}>
-                Cancel subscription
-              </Button>
+              <Button variant="outline" fullWidth onClick={() => setTab('plans')}>Change plan</Button>
             </div>
           </Card>
         </div>
