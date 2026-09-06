@@ -138,9 +138,9 @@ export const NAV_BY_ROLE = {
     { label: 'Shortlists', to: '/club/shortlists', icon: 'list' },
     { label: 'Trials', to: '/club/trials', icon: 'target' },
     { label: 'Reports', to: '/club/reports', icon: 'doc' },
-    { label: 'Staff', to: '/club/staff', icon: 'shield' },
-    { label: 'Verification', to: '/club/verify', icon: 'building' },
-    { label: 'Billing', to: '/billing', icon: 'card' },
+   { label: 'Staff', to: '/club/staff', icon: 'shield', roles: ['club_admin', 'club_staff'] },
+{ label: 'Verification', to: '/club/verify', icon: 'building', roles: ['club_admin'] },
+{ label: 'Billing', to: '/billing', icon: 'card', roles: ['club_admin'] },
   ],
   admin: [
     { label: 'Overview', to: '/admin', icon: 'grid' },
