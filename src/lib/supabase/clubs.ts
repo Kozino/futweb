@@ -14,6 +14,10 @@ export interface ClubRow {
   founded_year: number | null
   logo_url: string | null
   website: string | null
+  address: string | null
+  owner_name: string | null
+  contact_phone: string | null
+  contact_email: string | null
   cac_number: string | null
   nff_affiliation: string | null
   entity_verified: boolean
