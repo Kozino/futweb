@@ -10,6 +10,7 @@ import {
 
 import { PublicLayout } from '@/components/layout/PublicLayout'
 import { AppShell } from '@/components/layout/AppShell'
+import { ErrorBoundary } from '@/components/layout/ErrorBoundary'
 import { useAuth } from '@/context/AuthContext'
 import { Toaster, Skeleton, Button, Card, Icon, ProgressBar, Input } from '@/components/ui'
 
@@ -819,8 +820,10 @@ function Onboarding() {
  * ------------------------------------------------------------------ */
 
 export default function App() {
+  const location = useLocation()
   return (
     <>
+      <ErrorBoundary key={location.pathname}>
       <Routes>
         {/* ---------------------------------------------------------- *
          * Public marketing site
@@ -1272,7 +1275,8 @@ export default function App() {
             />
           }
         />
-      </Routes>
+    </Routes>
+      </ErrorBoundary>
 
       <Toaster />
     </>
