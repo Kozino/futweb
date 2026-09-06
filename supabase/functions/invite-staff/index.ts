@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
 
   /* ---- 6. No account yet: send a real invite that seats them on signup. ---- */
   const { error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${APP_URL}/login`,
+   redirectTo: `${APP_URL}/accept-invite`,
     data: {
       invited_club_id: clubId,
       invited_role: role,
