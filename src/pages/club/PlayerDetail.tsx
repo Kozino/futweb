@@ -30,10 +30,14 @@ export default function PlayerDetail() {
     let cancelled = false
     ;(async () => {
       if (!hasSupabase || !id) { setLoading(false); return }
-      try {
+           try {
         const p = await getPlayerDetail(id)
         if (!cancelled) setPlayer(p)
-      } catch { if (!cancelled) toast({ tone: 'error', title: 'Could not load player' }) }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[PlayerDetail] failed to load player', id, err)
+        if (!cancelled) toast({ tone: 'error', title: 'Could not load player', description: err instanceof Error ? err.message : 'Please try again.' })
+      }
       finally { if (!cancelled) setLoading(false) }
     })()
     return () => { cancelled = true }
