@@ -25,7 +25,7 @@ import { rateLimit } from '../_shared/rateLimit.ts'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const APP_URL = Deno.env.get('APP_URL') ?? 'https://futweb.app'
+const APP_URL = Deno.env.get('APP_URL') ?? 'https://futweb.netlify.app'
 
 const ALLOWED_ROLES = new Set(['club_admin', 'club_staff', 'scout'])
 
