@@ -123,24 +123,26 @@ export default function Staff() {
     if (!trimmed) { toast({ tone: 'error', title: 'Email required' }); return }
     setSaving(true)
     try {
-      const { data: found, error: fErr } = await supabase!.from('profiles').select('id').eq('email', trimmed).maybeSingle()
-      if (fErr) throw fErr
-      if (!found) {
-        toast({ tone: 'error', title: 'No account with that email', description: 'The person must register on FutWeb before you can add them.' })
-        return
-      }
-      const existing = members.find(m => m.userId === found.id)
-      if (existing) { toast({ tone: 'info', title: 'Already a member', description: `${existing.name} is already in your club.` }); setInvite(false); setEmail(''); return }
-
-      const { error } = await supabase!.from('org_members').insert({
-        club_id: clubId, user_id: found.id, role, invited_by: user.id, accepted_at: new Date().toISOString(),
+      const { data, error } = await supabase!.functions.invoke('invite-staff', {
+        body: { clubId, email: trimmed, role },
       })
-      if (error) throw error
+      if (error) throw new Error(error.message || 'Could not add staff.')
+
+      const result = data as { status?: string; error?: string; name?: string; email?: string }
+      if (result?.error) throw new Error(result.error)
+
+      if (result.status === 'already_member') {
+        toast({ tone: 'info', title: 'Already a member', description: `${result.name ?? 'This person'} is already in your club.` })
+      } else if (result.status === 'invited') {
+        toast({ tone: 'success', title: 'Invite sent', description: `${result.email} will get an email to set up their account. They'll land straight in your club with the ${ROLES.find(r => r.value === role)?.label ?? role} role.` })
+      } else {
+        toast({ tone: 'success', title: 'Staff added', description: 'They now have access with the selected role.' })
+      }
+
       await load()
       setInvite(false)
       setEmail('')
       setRole('scout')
-      toast({ tone: 'success', title: 'Staff added', description: 'They now have access with the selected role.' })
     } catch (err) {
       toast({ tone: 'error', title: 'Could not add staff', description: err instanceof Error ? err.message : 'Please try again.' })
     } finally { setSaving(false) }
@@ -218,8 +220,8 @@ export default function Staff() {
         </div>
       )}
 
-      <Modal open={invite} onClose={() => setInvite(false)} size="md" title="Add a staff member"
-        description="The person must already have a FutWeb account with this email.">
+          <Modal open={invite} onClose={() => setInvite(false)} size="md" title="Add a staff member"
+        description="If they already have a FutWeb account they're added instantly. If not, we'll email them an invite to set one up — either way they land directly in your club with this role.">
         <div className="space-y-4">
           <Input label="Account email" type="email" placeholder="coach@club.ng" value={email} onChange={e => setEmail(e.target.value)} />
           <Select label="Role" value={role} onChange={e => setRole(e.target.value)}
