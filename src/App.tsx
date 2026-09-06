@@ -12,6 +12,7 @@ import { PublicLayout } from '@/components/layout/PublicLayout'
 import { AppShell } from '@/components/layout/AppShell'
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary'
 import { useAuth } from '@/context/AuthContext'
+import { useClub, type StaffRole } from '@/context/ClubContext'
 import { Toaster, Skeleton, Button, Card, Icon, ProgressBar, Input } from '@/components/ui'
 
 import { completePlayerOnboarding } from '@/lib/supabase/players'
@@ -154,6 +155,46 @@ function RequireRole({
 
   if (!allowed) {
     return <Navigate to="/app" replace />
+  }
+
+  return <>{children}</>
+}
+
+
+/**
+ * Restricts a page to specific staff roles WITHIN a club account.
+ *
+ * Only applies when the signed-in account is a club account — a player
+ * hitting /billing, or a site admin, passes straight through. While the
+ * caller's membership is still loading we show a skeleton rather than a
+ * false "not allowed" redirect.
+ *
+ * This is UX only. The actual boundary is RLS: org_members_read is scoped
+ * to club_admin/club_staff (see migration 0011), and the verification/
+ * billing tables are already scoped to `subject_id`/`subscriber = auth.uid()`,
+ * so even if someone bypassed this guard they still couldn't read another
+ * member's data.
+ */
+function RequireStaffAccess({
+  allow,
+  children,
+}: {
+  allow: StaffRole[]
+  children: ReactNode
+}) {
+  const { user } = useAuth()
+  const { role, loading } = useClub()
+
+  if (user?.accountType !== 'club' || user.role === 'admin') {
+    return <>{children}</>
+  }
+
+  if (loading) {
+    return <Skeleton className="h-64 w-full" />
+  }
+
+  if (!role || !allow.includes(role)) {
+    return <Navigate to="/club" replace />
   }
 
   return <>{children}</>
@@ -1138,7 +1179,9 @@ export default function App() {
               <RequireAuth>
                 <RequireRole role="club">
                   <RequireSubscription>
-                    <Staff />
+                    <RequireStaffAccess allow={['club_admin', 'club_staff']}>
+                      <Staff />
+                    </RequireStaffAccess>
                   </RequireSubscription>
                 </RequireRole>
               </RequireAuth>
@@ -1151,7 +1194,9 @@ export default function App() {
               <RequireAuth>
                 <RequireRole role="club">
                   <RequireSubscription>
-                    <ClubVerify />
+                    <RequireStaffAccess allow={['club_admin']}>
+                      <ClubVerify />
+                    </RequireStaffAccess>
                   </RequireSubscription>
                 </RequireRole>
               </RequireAuth>
@@ -1245,7 +1290,9 @@ export default function App() {
             path="/billing"
             element={
               <RequireAuth>
-                <Billing />
+                <RequireStaffAccess allow={['club_admin']}>
+                  <Billing />
+                </RequireStaffAccess>
               </RequireAuth>
             }
           />
@@ -1254,7 +1301,9 @@ export default function App() {
             path="/checkout"
             element={
               <RequireAuth>
-                <Billing />
+                <RequireStaffAccess allow={['club_admin']}>
+                  <Billing />
+                </RequireStaffAccess>
               </RequireAuth>
             }
           />
