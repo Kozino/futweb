@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Button, Card, Icon, Input, Skeleton, toast } from '@/components/ui'
+import { Badge, Button, Card, Icon, Input, Select, Skeleton, toast } from '@/components/ui'
 import { useClub } from '@/context/ClubContext'
 import { useAuth } from '@/context/AuthContext'
 import { hasSupabase, supabase } from '@/lib/supabase'
+import { LEAGUES } from '@/lib/constants'
 import {
   getMyVerificationRequests,
   submitVerificationCheck,
@@ -19,12 +20,13 @@ const FEDERATIONS = [
 ]
 
 export default function ClubVerify() {
-  const { club } = useClub()
+  const { club, refresh } = useClub()
   const { user } = useAuth()
 
   const [status, setStatus] = useState<'none' | 'pending' | 'verified' | 'rejected'>('none')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [savingProfile, setSavingProfile] = useState(false)
 
   const [cacNumber, setCacNumber] = useState('')
   const [federation, setFederation] = useState(FEDERATIONS[0])
@@ -32,10 +34,24 @@ export default function ClubVerify() {
   const [cacFile, setCacFile] = useState<File | null>(null)
   const [faFile, setFaFile] = useState<File | null>(null)
 
+  // Club profile fields — editable independently of the CAC/FA submission.
+  const [foundedYear, setFoundedYear] = useState('')
+  const [leagueCode, setLeagueCode] = useState('')
+  const [address, setAddress] = useState('')
+  const [ownerName, setOwnerName] = useState('')
+  const [contactPhone, setContactPhone] = useState('')
+  const [contactEmail, setContactEmail] = useState('')
+
   useEffect(() => {
     if (!club) { setCacNumber(''); return }
     setCacNumber(club.cac_number ?? '')
     setStateFa('')
+    setFoundedYear(club.founded_year ? String(club.founded_year) : '')
+    setLeagueCode(club.league_code ?? '')
+    setAddress(club.address ?? '')
+    setOwnerName(club.owner_name ?? '')
+    setContactPhone(club.contact_phone ?? '')
+    setContactEmail(club.contact_email ?? '')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [club?.id])
 
@@ -96,6 +112,37 @@ export default function ClubVerify() {
     } finally { setSaving(false) }
   }
 
+  async function saveProfile() {
+    if (!club) return
+    const yearNum = foundedYear.trim() ? Number(foundedYear.trim()) : null
+    if (yearNum !== null && (!Number.isInteger(yearNum) || yearNum < 1800 || yearNum > new Date().getFullYear())) {
+      toast({ tone: 'error', title: 'Invalid year founded' })
+      return
+    }
+    if (contactEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim())) {
+      toast({ tone: 'error', title: 'Invalid contact email' })
+      return
+    }
+    setSavingProfile(true)
+    try {
+      if (supabase) {
+        const { error } = await supabase.from('clubs').update({
+          founded_year: yearNum,
+          league_code: leagueCode || null,
+          address: address.trim() || null,
+          owner_name: ownerName.trim() || null,
+          contact_phone: contactPhone.trim() || null,
+          contact_email: contactEmail.trim() || null,
+        }).eq('id', club.id)
+        if (error) throw error
+      }
+      await refresh()
+      toast({ tone: 'success', title: 'Club profile updated' })
+    } catch (err) {
+      toast({ tone: 'error', title: 'Could not save', description: err instanceof Error ? err.message : 'Please try again.' })
+    } finally { setSavingProfile(false) }
+  }
+
   if (loading) return <Skeleton className="h-64 w-full" />
 
   const badgeTone = status === 'verified' ? 'trust' : status === 'pending' ? 'gold' : status === 'rejected' ? 'red' : 'blue'
@@ -112,7 +159,48 @@ export default function ClubVerify() {
           Connect the app to Supabase to submit your club verification.
         </Card>
       ) : (
+        <>
         <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+          <Card className="p-6">
+            <h3 className="text-sm font-bold">Club profile</h3>
+            <p className="mt-1 text-xs text-ink-500">Shown on your club's public profile and used to confirm your identity with players.</p>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <Input label="Year founded" type="number" placeholder="e.g. 2004"
+                value={foundedYear} onChange={e => setFoundedYear(e.target.value)} />
+              <Select label="League" value={leagueCode} onChange={e => setLeagueCode(e.target.value)}
+                placeholder="Select a league" options={LEAGUES.map(l => ({ value: l.value, label: l.label }))} />
+              <Input label="Name of owner" placeholder="e.g. Chinedu Okafor" className="sm:col-span-2"
+                value={ownerName} onChange={e => setOwnerName(e.target.value)} />
+              <Input label="Club address" placeholder="Street, city, state" className="sm:col-span-2"
+                value={address} onChange={e => setAddress(e.target.value)} />
+              <Input label="Contact phone" type="tel" placeholder="+234…"
+                value={contactPhone} onChange={e => setContactPhone(e.target.value)} />
+              <Input label="Contact email" type="email" placeholder="admin@club.ng"
+                value={contactEmail} onChange={e => setContactEmail(e.target.value)} />
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <Button variant="outline" icon="check" loading={savingProfile} onClick={() => void saveProfile()}>
+                Save club profile
+              </Button>
+            </div>
+          </Card>
+
+          <div className="space-y-4">
+            <Card className="p-5">
+              <h3 className="text-sm font-bold">Club: {club?.name ?? '—'}</h3>
+              <div className="mt-3 space-y-2 text-xs text-ink-600">
+                <p className="flex justify-between"><span className="text-ink-400">Founded</span><span className="font-semibold">{club?.founded_year ?? '—'}</span></p>
+                <p className="flex justify-between"><span className="text-ink-400">League</span><span className="font-semibold">{LEAGUES.find(l => l.value === club?.league_code)?.label ?? '—'}</span></p>
+                <p className="flex justify-between"><span className="text-ink-400">Owner</span><span className="font-semibold">{club?.owner_name ?? '—'}</span></p>
+                <p className="flex justify-between"><span className="text-ink-400">Contact</span><span className="font-semibold">{club?.contact_phone ?? club?.contact_email ?? '—'}</span></p>
+              </div>
+            </Card>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
           <Card className="p-6">
             <h3 className="text-sm font-bold">Your registration details</h3>
             <p className="mt-1 text-xs text-ink-500">These are checked against official records by a moderator.</p>
@@ -183,6 +271,7 @@ export default function ClubVerify() {
             </Card>
           </div>
         </div>
+        </>
       )}
     </div>
   )
