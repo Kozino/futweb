@@ -1,4 +1,3 @@
-
 import {
   createContext,
   useCallback,
@@ -19,6 +18,8 @@ import {
 import { getClubPlayers } from '@/lib/supabase/recruitment'
 import { hasSupabase } from '@/lib/supabase'
 
+export type StaffRole = 'club_admin' | 'club_staff' | 'scout'
+
 interface ClubContextValue {
   club: ClubRow | null
   membership: ClubMembership | null
@@ -26,6 +27,14 @@ interface ClubContextValue {
   loading: boolean
   error: string | null
   refresh: () => Promise<void>
+  /**
+   * The caller's role within THIS club, resolved once membership has
+   * loaded. The club owner is always 'club_admin' even before an
+   * org_members row exists for them (see Staff.tsx for the same rule).
+   * `null` while loading or when the user has no club role at all —
+   * callers must not treat null as "allowed".
+   */
+  role: StaffRole | null
 }
 
 const ClubContext = createContext<ClubContextValue | null>(null)
@@ -82,6 +91,12 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     void refresh()
   }, [refresh])
 
+  const role = useMemo<StaffRole | null>(() => {
+    if (loading) return null
+    if (club && user && club.owner_id === user.id) return 'club_admin'
+    return membership?.role ?? null
+  }, [club, membership, user, loading])
+
   const value = useMemo<ClubContextValue>(
     () => ({
       club,
@@ -90,8 +105,9 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       refresh,
+      role,
     }),
-    [club, membership, squad, loading, error, refresh],
+    [club, membership, squad, loading, error, refresh, role],
   )
 
   return (
@@ -110,4 +126,3 @@ export function useClub() {
 
   return context
 }
-
