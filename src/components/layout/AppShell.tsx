@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { Logo } from './Logo'
 import { Avatar, Icon, Tooltip, type IconName } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
+import { useClub } from '@/context/ClubContext'
 import { useOffline } from '@/context/OfflineContext'
 import { supabase, hasSupabase } from '@/lib/supabase'
 import { NAV_BY_ROLE } from '@/lib/constants'
@@ -36,8 +37,14 @@ function OfflineBanner() {
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { user } = useAuth()
+  const { role: staffRole } = useClub()
   const role = user?.role === 'admin' ? 'admin' : user?.accountType === 'club' ? 'club' : 'player'
-  const items = NAV_BY_ROLE[role] as unknown as { label: string; to: string; icon: string }[]
+  const allItems = NAV_BY_ROLE[role] as unknown as { label: string; to: string; icon: string; roles?: string[] }[]
+  // For club accounts, hide any item scoped to roles the caller doesn't hold.
+  // (This is a UX convenience only — Staff.tsx and RLS enforce the real boundary.)
+  const items = role === 'club'
+    ? allItems.filter(item => !item.roles || (staffRole && item.roles.includes(staffRole)))
+    : allItems
 
   return (
     <div className="flex h-full flex-col bg-ink-900 text-ink-200">
