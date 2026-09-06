@@ -33,6 +33,7 @@ import ClubPublicProfile from '@/pages/public/ClubPublicProfile'
 
 /* Auth */
 import Login from '@/pages/auth/Login'
+import AcceptInvite from '@/pages/AcceptInvite'
 import Register from '@/pages/auth/Register'
 import { Paywall } from '@/pages/auth/Paywall'
 
