@@ -913,6 +913,11 @@ export default function App() {
         />
 
         <Route
+          path="/accept-invite"
+          element={<AcceptInvite />}
+        />
+
+        <Route
           path="/forgot-password"
           element={
             <Navigate
