@@ -158,5 +158,6 @@ export const NAV_BY_ROLE = {
     { label: 'Disputes', to: '/admin/disputes', icon: 'alert' },
     { label: 'Audit Log', to: '/admin/audit', icon: 'doc' },
     { label: 'Enterprise', to: '/admin/enterprise', icon: 'building' },
+    { label: 'Federation & API', to: '/admin/federation-api', icon: 'globe' },
   ],
 } as const
