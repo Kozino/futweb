@@ -271,6 +271,20 @@ export async function getMyTrialApplications(playerId: string) {
   return data ?? []
 }
 
+/**
+ * Club-side self-heal: after a club becomes entity-verified or upgrades its
+ * plan, this re-evaluates its pending postings and publishes any that now
+ * qualify. Mirrors migration 0011_trial_review_pipeline.sql.
+ */
+export async function publishEligiblePendingTrials(clubId: string): Promise<number> {
+  if (!supabase) throw new Error('Supabase is not configured.')
+  const { data, error } = await supabase.rpc('publish_eligible_pending_trials', {
+    p_club_id: clubId,
+  })
+  if (error) throw error
+  return (data as number) ?? 0
+}
+
 export async function getClubTrialApplications(trialId: string) {
   if (!supabase) {
     throw new Error('Supabase is not configured.')
