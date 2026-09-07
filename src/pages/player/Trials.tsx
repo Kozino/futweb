@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge, Button, Card, EmptyState, Skeleton, Tabs, toast } from '@/components/ui'
 import { NoFeeGuarantee } from '@/components/trust'
 import { usePlayer } from '@/context/PlayerContext'
+import { useAuth } from '@/context/AuthContext'
 import { useOffline } from '@/context/OfflineContext'
+import { hasFeature } from '@/lib/entitlements'
+import { openConversation } from '@/lib/supabase/messaging'
 import {
   getOpenTrialsWithClubs,
   getMyApplicationsWithTrials,
@@ -15,13 +19,27 @@ import { hasSupabase } from '@/lib/supabase'
 import { formatDate, relativeTime } from '@/lib/utils'
 
 export default function PlayerTrials() {
+  const navigate = useNavigate()
   const { player } = usePlayer()
+  const { user } = useAuth()
   const { enqueue } = useOffline()
   const [tab, setTab] = useState<'open' | 'applied'>('open')
 
   const [open, setOpen] = useState<TrialWithClub[]>([])
   const [apps, setApps] = useState<MyTrialApplication[]>([])
   const [loading, setLoading] = useState(true)
+  const canMessage = hasFeature(user, 'direct_messaging')
+
+  async function messageClub(t: TrialWithClub) {
+    if (!player) { toast({ tone: 'error', title: 'No player profile yet', description: 'Finish your player onboarding first.' }); return }
+    if (!t.club_verified) { toast({ tone: 'error', title: 'Club not verified', description: 'Only verified clubs can be messaged.' }); return }
+    try {
+      const convId = await openConversation(player.id, t.club_id)
+      navigate(`/messages?conv=${convId}`)
+    } catch (err) {
+      toast({ tone: 'error', title: 'Could not start chat', description: err instanceof Error ? err.message : 'Upgrade to Elite to message clubs.' })
+    }
+  }
   const [applying, setApplying] = useState<string | null>(null)
 
   useEffect(() => {
@@ -110,7 +128,12 @@ export default function PlayerTrials() {
                     </div>
                     <p className="mt-3 text-sm leading-relaxed text-ink-700">{t.description}</p>
                   </div>
-                  <div className="shrink-0">
+                  <div className="flex shrink-0 flex-col items-stretch gap-2">
+                    {canMessage && t.club_verified && (
+                      <Button variant="outline" size="sm" icon="chat" onClick={() => void messageClub(t)}>
+                        Message club
+                      </Button>
+                    )}
                     <Button loading={applying === t.id} disabled={isApplied} icon={isApplied ? 'check' : 'arrow-right'}
                       onClick={() => void apply(t)}>
                       {isApplied ? 'Applied' : 'Apply'}

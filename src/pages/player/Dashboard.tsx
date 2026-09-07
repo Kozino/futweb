@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -14,6 +14,11 @@ import {
 import { useAuth } from '@/context/AuthContext'
 import { usePlayer } from '@/context/PlayerContext'
 import { cn } from '@/lib/utils'
+import { FeatureGate, UpgradeCard } from '@/components/plan/FeatureGate'
+import { ShareCardModal, ShareCardPreview } from '@/components/player/ShareCard'
+import ProfileViewsPanel from '@/components/player/ProfileViewsPanel'
+import { buildShareCardData, latestClubName } from '@/lib/playerCard'
+import { hasFeature } from '@/lib/entitlements'
 
 type ApplicationRow = {
   id: string
@@ -147,6 +152,26 @@ export default function PlayerDashboard() {
     () => player ? calculateCompleteness(player) : 0,
     [player],
   )
+
+  const [shareOpen, setShareOpen] = useState(false)
+
+  const shareData = useMemo(
+    () =>
+      player
+        ? buildShareCardData({
+            player,
+            attributes,
+            clubName: latestClubName(career),
+            verified: Boolean(user && user.verificationTier !== 'unverified'),
+          })
+        : null,
+    [player, attributes, career, user],
+  )
+
+  const shareUrl = useMemo(() => {
+    if (!player?.slug) return undefined
+    return `${window.location.origin}/players/${player.slug}`
+  }, [player?.slug])
 
   const recentStats = useMemo(
     () => typedStats.slice(0, 3),
@@ -290,6 +315,14 @@ export default function PlayerDashboard() {
                 Find trials
               </Button>
             </Link>
+
+            {hasFeature(user, 'pdf_dossier') && (
+              <Link to="/player/dossier">
+                <Button variant="outline" icon="download">
+                  Export dossier
+                </Button>
+              </Link>
+            )}
           </>
         }
       />
@@ -396,6 +429,42 @@ export default function PlayerDashboard() {
         </div>
       </Card>
 
+      {/* Shareable CV card (Pro+ / trial / admin) */}
+      <FeatureGate
+        feature="share_card"
+        fallback={
+          <div className="mb-4">
+            <UpgradeCard
+              feature="share_card"
+              title="Share your CV as an image card"
+              description="Turn your profile into a crisp, WhatsApp-ready PNG card scouts actually forward. Included on Pro."
+            />
+          </div>
+        }
+      >
+        {shareData && (
+          <Card className="mb-4 overflow-hidden">
+            <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center">
+              <div className="w-32 shrink-0 self-center sm:self-auto">
+                <ShareCardPreview data={shareData} avatarUrl={undefined} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-bold text-ink-900">Shareable CV card</h2>
+                <p className="mt-1 text-xs leading-relaxed text-ink-500">
+                  A single image card with your score, top attributes and QR-ready link. Send it
+                  straight to WhatsApp or Instagram — no link-clicking required.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" icon="share" onClick={() => setShareOpen(true)}>
+                    Preview & share
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+      </FeatureGate>
+
       {/* Profile strength */}
       <Card className="mb-4 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -466,6 +535,24 @@ export default function PlayerDashboard() {
           ))}
         </div>
       </Card>
+
+      {/* Scout view analytics (Pro+ / trial / admin) */}
+      <FeatureGate
+        feature="profile_analytics"
+        fallback={
+          <div className="mb-4 mt-4">
+            <UpgradeCard
+              feature="profile_analytics"
+              title="See who viewed your profile"
+              description="Know which scouts and clubs have opened your profile. Included with Pro."
+            />
+          </div>
+        }
+      >
+        <div className="mb-4 mt-4">
+          <ProfileViewsPanel playerId={player.id} />
+        </div>
+      </FeatureGate>
 
       {/* Core football data */}
       <div className="grid gap-4 lg:grid-cols-3">
@@ -836,6 +923,14 @@ export default function PlayerDashboard() {
             </div>
           </div>
         </Card>
+      )}
+      {shareData && (
+        <ShareCardModal
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          data={shareData}
+          profileUrl={shareUrl}
+        />
       )}
     </div>
   )
