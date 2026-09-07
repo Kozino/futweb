@@ -30,11 +30,21 @@ export default function Subscriptions() {
       const list = rows ?? []
       const subscriberIds = [...new Set(list.map(s => s.subscriber))]
       const planCodes = [...new Set(list.map(s => s.plan_code))]
-      const [profilesRes, plansRes] = await Promise.all([
-        subscriberIds.length ? client.from('profiles').select('id, full_name, club_name').in('id', subscriberIds) : Promise.resolve({ data: [] as { id: string; full_name: string; club_name: string | null }[] }),
+      // NOTE: profiles has no `club_name` column — a club's display name lives
+      // on clubs.name, keyed by the club owner (who is also the subscriber).
+      // Resolve an owner's club name from clubs, falling back to their profile
+      // full_name so club subscriptions aren't labelled "Unknown account".
+      const [profilesRes, plansRes, clubsRes] = await Promise.all([
+        subscriberIds.length ? client.from('profiles').select('id, full_name').in('id', subscriberIds) : Promise.resolve({ data: [] as { id: string; full_name: string }[] }),
         planCodes.length ? client.from('plans').select('code, name, price_ngn').in('code', planCodes) : Promise.resolve({ data: [] as { code: string; name: string; price_ngn: number }[] }),
+        client.from('clubs').select('name, owner_id'),
       ])
-      const orgById = Object.fromEntries((profilesRes.data ?? []).map(p => [p.id, p.club_name || p.full_name]))
+      const clubNameByOwner = Object.fromEntries(
+        (clubsRes.data ?? []).map(c => [c.owner_id, c.name]),
+      )
+      const orgById = Object.fromEntries(
+        (profilesRes.data ?? []).map(p => [p.id, clubNameByOwner[p.id] ?? p.full_name]),
+      )
       const planByCode = Object.fromEntries((plansRes.data ?? []).map(p => [p.code, p]))
       if (!cancelled) {
         setSubs(list.map(s => ({
