@@ -80,7 +80,10 @@ export default function Discovery() {
     <div>
       <PageHeader breadcrumb="Club workspace" icon="search" title="Discovery"
         subtitle="Search players visible to your club. Rankings account for position fit, age and data confidence."
-        actions={<Badge tone="neutral">{results.length} match{results.length === 1 ? '' : 'es'}</Badge>} />
+        actions={<>
+          <Link to="/club/compare"><Button variant="outline" icon="chart" size="sm">Compare</Button></Link>
+          <Badge tone="neutral">{results.length} match{results.length === 1 ? '' : 'es'}</Badge>
+        </>} />
 
       {!hasSupabase || !clubId ? (
         <Card className="p-8 text-center text-sm text-ink-500">

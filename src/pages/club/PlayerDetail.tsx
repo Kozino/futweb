@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge, Button, Card, EmptyState, Icon, Modal, Skeleton, Tabs, Textarea, toast } from '@/components/ui'
 import { AttributeRadar } from '@/components/player/Radar'
@@ -8,14 +8,19 @@ import { MinorProtectionNotice } from '@/components/trust'
 import { ATTRIBUTE_GROUPS, per90 } from '@/lib/ratings'
 import { useOffline } from '@/context/OfflineContext'
 import { useAuth } from '@/context/AuthContext'
+import { useClub } from '@/context/ClubContext'
 import { hasSupabase, supabase } from '@/lib/supabase'
 import { getPlayerDetail, type EnrichedPlayer } from '@/lib/supabase/workspace'
+import { recordProfileView } from '@/lib/supabase/views'
+import { openConversation } from '@/lib/supabase/messaging'
 import { cn, formatDate } from '@/lib/utils'
 
 export default function PlayerDetail() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const { online, enqueue } = useOffline()
   const { user } = useAuth()
+  const { club } = useClub()
 
   const [player, setPlayer] = useState<EnrichedPlayer | null>(null)
   const [loading, setLoading] = useState(true)
@@ -26,6 +31,20 @@ export default function PlayerDetail() {
   const [stars, setStars] = useState(3)
   const [note, setNote] = useState('')
 
+  async function messagePlayer() {
+    if (!player || !club?.id) return
+    if (player.is_minor && !player.guardian_name) {
+      toast({ tone: 'error', title: 'Cannot message', description: 'This minor player has no guardian consent on file.' })
+      return
+    }
+    try {
+      const convId = await openConversation(player.id, club.id)
+      navigate(`/messages?conv=${convId}`)
+    } catch (err) {
+      toast({ tone: 'error', title: 'Could not start chat', description: err instanceof Error ? err.message : 'The player must be on Elite for direct messaging.' })
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -33,6 +52,9 @@ export default function PlayerDetail() {
            try {
         const p = await getPlayerDetail(id)
         if (!cancelled) setPlayer(p)
+        // Tell the owner we looked at their profile (server drops self-views,
+        // rates repeats, and derives our club identity from auth).
+        if (p) void recordProfileView(p.id)
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[PlayerDetail] failed to load player', id, err)
@@ -98,7 +120,12 @@ export default function PlayerDetail() {
 
       <PageHeader breadcrumb="Player profile" title={`${player.first_name} ${player.last_name}`}
         subtitle={`${player.position_primary} · ${player.age} yrs · ${player.clubName ?? 'Unattached'} · ${player.state_of_origin ?? '—'}`}
-        actions={<Button icon="doc" onClick={() => setReportOpen(true)}>Scout report</Button>} />
+        actions={<>
+          {club && (
+            <Button variant="outline" icon="chat" onClick={() => void messagePlayer()}>Message</Button>
+          )}
+          <Button icon="doc" onClick={() => setReportOpen(true)}>Scout report</Button>
+        </>} />
 
       {player.is_minor && <div className="mb-4"><MinorProtectionNotice guardianName={player.guardian_name ?? undefined} /></div>}
 
