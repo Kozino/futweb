@@ -90,7 +90,7 @@ export default function ClubTrials() {
       setOpen(false)
       setForm(EMPTY)
       setTrials(await getClubTrialsWithClubs(clubId))
-      toast({ tone: 'success', title: 'Trial submitted', description: 'Verification usually completes within one working day.' })
+      toast({ tone: 'success', title: 'Trial posted', description: 'Entity-verified clubs publish instantly; otherwise this is pending club verification.' })
     } catch (err) {
       toast({ tone: 'error', title: 'Could not post trial', description: err instanceof Error ? err.message : 'Please try again.' })
     } finally {
@@ -160,11 +160,11 @@ export default function ClubTrials() {
       )}
 
       <Modal open={open} onClose={() => setOpen(false)} size="lg" title="Post a trial"
-        description="Trials go live once verification confirms your club details."
+        description="A posting goes live (open + verified) to players when your club is entity-verified AND on Pro Club/Enterprise (or in trial). Otherwise it posts as pending."
         footer={<>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
           <Button disabled={!canSubmit} icon="check" loading={saving} onClick={() => void submitTrial()}>
-            Submit for verification
+            Post trial
           </Button>
         </>}>
         <div className="space-y-4">
