@@ -4,6 +4,13 @@ import { Badge, Button, Card, EmptyState, Icon, Modal, Skeleton, Tabs, Textarea,
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { cn, formatDate, relativeTime } from '@/lib/utils'
+import {
+  adminVerifyTrial,
+  adminRejectTrial,
+  getTrialReviewQueue,
+  type TrialReviewRow,
+} from '@/lib/supabase/admin'
+import { publishEligiblePendingTrials } from '@/lib/supabase/recruitment'
 
 interface VDoc { id: string; kind: string; storage_path: string; uploaded_at: string }
 interface VRequest {
@@ -23,6 +30,26 @@ export default function Verification() {
   const [selected, setSelected] = useState<VRequest | null>(null)
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // Pending trial postings awaiting a moderator decision.
+  const [trialLoading, setTrialLoading] = useState(true)
+  const [trialQueue, setTrialQueue] = useState<TrialReviewRow[]>([])
+  const [trialAction, setTrialAction] = useState<'approve' | 'reject' | null>(null)
+  const [trialTarget, setTrialTarget] = useState<TrialReviewRow | null>(null)
+  const [trialNote, setTrialNote] = useState('')
+  const [trialSaving, setTrialSaving] = useState(false)
+
+  async function loadTrials() {
+    if (!supabase) { setTrialLoading(false); return }
+    setTrialLoading(true)
+    try {
+      setTrialQueue(await getTrialReviewQueue())
+    } catch { /* non-fatal — queue is a convenience */ } finally {
+      setTrialLoading(false)
+    }
+  }
+
+  useEffect(() => { loadTrials() }, [])
 
   async function load() {
     if (!supabase) { setLoading(false); return }
@@ -89,6 +116,8 @@ export default function Verification() {
       await supabase.from('clubs').update({
         entity_verified: true, entity_verified_at: new Date().toISOString(),
       }).eq('id', r.club_id)
+      // Once entity-verified, publish that club's now-eligible pending trials.
+      try { await publishEligiblePendingTrials(r.club_id) } catch { /* best effort */ }
     }
 
     toast({
@@ -107,12 +136,86 @@ export default function Verification() {
     window.open(data.signedUrl, '_blank')
   }
 
+  async function decideTrial(approve: boolean) {
+    if (!trialTarget) return
+    setTrialSaving(true)
+    try {
+      if (approve) await adminVerifyTrial(trialTarget.id, trialNote.trim() || undefined)
+      else await adminRejectTrial(trialTarget.id, trialNote.trim() || undefined)
+      toast({
+        tone: approve ? 'success' : 'info',
+        title: approve ? 'Trial published' : 'Trial rejected',
+        description: approve
+          ? `“${trialTarget.title}” is now open + verified and visible to players.`
+          : 'The club has been notified with your reason.',
+      })
+      setTrialAction(null); setTrialTarget(null); setTrialNote('')
+      await loadTrials()
+    } catch (err) {
+      toast({ tone: 'error', title: 'Could not update trial', description: err instanceof Error ? err.message : 'Please try again.' })
+    } finally {
+      setTrialSaving(false)
+    }
+  }
+
   if (loading) return <Skeleton className="h-64 w-full" />
 
   return (
     <div>
       <PageHeader breadcrumb="Admin console" icon="shield" title="Verification queue"
-        subtitle="Every check is recorded. Decisions are appealable and traceable." />
+        subtitle="Review identity/entity checks and trial postings awaiting publication." />
+
+      <Card className="mb-6 overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 p-5">
+          <div>
+            <h3 className="text-sm font-bold">Trial postings awaiting publication</h3>
+            <p className="mt-0.5 text-xs text-ink-500">
+              Clubs that cannot auto-publish land here. Approve to make the trial open + verified so
+              players can see and apply to it, or reject with a reason.
+            </p>
+          </div>
+          <Badge tone={trialQueue.length ? 'gold' : 'trust'} size="sm" icon={trialQueue.length ? 'clock' : 'check-circle'}>
+            {trialQueue.length} pending
+          </Badge>
+        </div>
+
+        {trialLoading ? (
+          <div className="p-5"><Skeleton className="h-24 w-full" /></div>
+        ) : trialQueue.length === 0 ? (
+          <div className="p-5">
+            <EmptyState icon="check-circle" title="No trials waiting"
+              description="Every posting that auto-published is already live. Nothing needs a decision." />
+          </div>
+        ) : (
+          <div className="divide-y divide-ink-100">
+            {trialQueue.map(t => (
+              <div key={t.id} className="flex flex-wrap items-start justify-between gap-3 p-5">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-bold">{t.title}</p>
+                    <Badge tone="blue" size="sm" icon="building">{t.club_name}</Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-ink-500">
+                    {t.positions.join(' · ') || 'All positions'} · {t.age_min}–{t.age_max} yrs · {t.location} · {formatDate(t.trial_date)}
+                  </p>
+                  <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-ink-600">{t.description}</p>
+                  <p className="mt-1 text-2xs text-ink-400">posted {relativeTime(t.created_at)}</p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button size="sm" variant="danger" icon="x"
+                    onClick={() => { setTrialTarget(t); setTrialAction('reject'); setTrialNote('') }}>
+                    Reject
+                  </Button>
+                  <Button size="sm" icon="check"
+                    onClick={() => { setTrialTarget(t); setTrialAction('approve'); setTrialNote('') }}>
+                    Approve
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <Tabs value={tab} onChange={setTab} tabs={[
         { value: 'pending', label: 'Pending', count: all.filter(r => r.status === 'pending' || r.status === 'in_review').length },
@@ -199,6 +302,51 @@ export default function Verification() {
               placeholder="Record what you checked and why." />
           </div>
         )}
+      </Modal>
+
+      <Modal open={!!trialTarget} onClose={() => { if (!trialSaving) { setTrialTarget(null); setTrialAction(null) } }} size="lg"
+        title={trialAction === 'approve' ? 'Approve & publish this trial?' : 'Reject this trial?'}
+        description={trialTarget
+          ? `“${trialTarget.title}” — ${trialTarget.club_name}. ${trialAction === 'approve'
+              ? 'It will become open + verified and players will be able to see and apply to it.'
+              : 'It will be cancelled and stay invisible to players until the club edits and resubmits.'}`
+          : undefined}
+        footer={
+          <>
+            <Button variant="outline" disabled={trialSaving} onClick={() => { setTrialTarget(null); setTrialAction(null) }}>Cancel</Button>
+            <Button
+              variant={trialAction === 'approve' ? 'primary' : 'danger'}
+              icon={trialAction === 'approve' ? 'check' : 'x'}
+              loading={trialSaving}
+              disabled={trialAction === 'reject' && !trialNote.trim()}
+              onClick={() => trialTarget && void decideTrial(trialAction === 'approve')}>
+              {trialAction === 'approve' ? 'Publish trial' : 'Reject trial'}
+            </Button>
+          </>
+        }>
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              ['Positions', trialTarget?.positions.join(' · ') || '—'],
+              ['Ages', trialTarget ? `${trialTarget.age_min}–${trialTarget.age_max}` : '—'],
+              ['Date', trialTarget ? formatDate(trialTarget.trial_date) : '—'],
+            ].map(([l, v]) => (
+              <div key={l} className="rounded-xl bg-ink-50 p-3">
+                <p className="text-2xs font-bold uppercase tracking-wider text-ink-400">{l}</p>
+                <p className="mt-0.5 text-sm font-bold">{v}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-sm leading-relaxed text-ink-600">{trialTarget?.description}</p>
+          <Textarea
+            label={trialAction === 'approve' ? 'Note to the club (optional)' : 'Reason for rejection (shown to the club)'}
+            value={trialNote}
+            maxChars={500}
+            onChange={e => setTrialNote(e.target.value)}
+            placeholder={trialAction === 'approve'
+              ? 'e.g. CAC + NFF confirmed; approved as a trusted posting.'
+              : 'e.g. Contact details do not match CAC records. Please correct and repost.'} />
+        </div>
       </Modal>
     </div>
   )
