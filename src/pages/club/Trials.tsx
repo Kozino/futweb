@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Button, Card, Input, Modal, Skeleton, Textarea, toast } from '@/components/ui'
+import { Badge, Button, Card, Icon, Input, Modal, Skeleton, Textarea, toast } from '@/components/ui'
 import { NoFeeGuarantee } from '@/components/trust'
 import { useClub } from '@/context/ClubContext'
+import { useAuth } from '@/context/AuthContext'
 import {
   getClubTrialsWithClubs,
   createTrialPosting,
+  publishEligiblePendingTrials,
   type TrialWithClub,
 } from '@/lib/supabase/recruitment'
 import { hasSupabase } from '@/lib/supabase'
+import { clubMayPublishVerifiedTrials, hasFeature } from '@/lib/entitlements'
 import { formatDate, relativeTime } from '@/lib/utils'
 
 const POSITIONS = ['GK', 'RB', 'RWB', 'CB', 'LB', 'LWB', 'CDM', 'CM', 'CAM', 'RM', 'LM', 'RW', 'LW', 'ST', 'CF']
@@ -31,13 +35,42 @@ const EMPTY: FormState = {
 
 export default function ClubTrials() {
   const { club } = useClub()
+  const { user } = useAuth()
   const [trials, setTrials] = useState<TrialWithClub[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState<FormState>(EMPTY)
   const [saving, setSaving] = useState(false)
+  const [rechecking, setRechecking] = useState(false)
 
   const clubId = club?.id
+
+  // Publication eligibility: needs entity verification AND a plan/state that
+  // grants verified trial postings (Pro Club/Enterprise, or full-access trial).
+  const entityVerified = Boolean(club?.entity_verified)
+  const planAllows = hasFeature(user, 'verified_trial_postings')
+  const qualifies = clubMayPublishVerifiedTrials(user, entityVerified)
+
+  async function recheck() {
+    if (!clubId || !hasSupabase) return
+    setRechecking(true)
+    try {
+      const n = await publishEligiblePendingTrials(clubId)
+      const rows = await getClubTrialsWithClubs(clubId)
+      setTrials(rows)
+      toast({
+        tone: n > 0 ? 'success' : 'info',
+        title: n > 0 ? `${n} trial${n === 1 ? '' : 's'} published` : 'Nothing to publish yet',
+        description: n > 0
+          ? 'Your posting(s) are now open + verified and visible to players.'
+          : 'Finish the steps below and this posting will go live automatically.',
+      })
+    } catch (err) {
+      toast({ tone: 'error', title: 'Could not check eligibility', description: err instanceof Error ? err.message : 'Please try again.' })
+    } finally {
+      setRechecking(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -140,6 +173,57 @@ export default function ClubTrials() {
                     <Badge tone="trust" size="sm">Fee to player ₦0</Badge>
                   </div>
                   <p className="mt-3 text-sm leading-relaxed text-ink-700">{t.description}</p>
+
+                  {!t.verified && (
+                    <div className="mt-4 rounded-xl border border-gold-200 bg-gold-50 p-3">
+                      {t.status === 'cancelled' ? (
+                        <>
+                          <p className="text-xs font-bold text-ink-700">Not published</p>
+                          <p className="mt-1 text-xs leading-relaxed text-ink-600">
+                            This posting was cancelled or rejected by a moderator. Edit it and post again,
+                            or contact support for the reason.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-xs font-bold text-ink-700">How this gets published</p>
+                          <ul className="mt-1.5 space-y-1 text-xs leading-relaxed text-ink-600">
+                            <li className="flex items-start gap-1.5">
+                              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-ink-400" />
+                              <span>
+                                {entityVerified
+                                  ? 'Your club is entity-verified ✓'
+                                  : <>Verify your club as a real organisation on the <Link className="font-bold text-ink-900 underline" to="/club/verify">Verification</Link> page.</>}
+                              </span>
+                            </li>
+                            <li className="flex items-start gap-1.5">
+                              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-ink-400" />
+                              <span>
+                                {planAllows
+                                  ? 'Your plan includes verified trial postings ✓'
+                                  : <>Your plan needs to include verified trial postings — see <Link className="font-bold text-ink-900 underline" to="/billing">Billing</Link>.</>}
+                              </span>
+                            </li>
+                          </ul>
+                          {qualifies ? (
+                            <button
+                              type="button"
+                              disabled={rechecking}
+                              onClick={() => void recheck()}
+                              className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-ink-900 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">
+                              <Icon name="refresh" size={12} />
+                              {rechecking ? 'Publishing…' : 'Publish now (requirements met)'}
+                            </button>
+                          ) : (
+                            <p className="mt-2 text-2xs text-ink-500">
+                              Once both are met, this posting is published automatically. A moderator can
+                              also approve it — we review pending postings daily.
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </Card>
             ))}
