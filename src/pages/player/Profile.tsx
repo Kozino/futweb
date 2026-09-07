@@ -5,8 +5,10 @@ import {
   Button,
   Card,
   CardHeader,
+  Field,
   Icon,
   Input,
+  Modal,
   Select,
   Tabs,
   Textarea,
@@ -16,6 +18,7 @@ import { MinorProtectionNotice } from '@/components/trust'
 import { usePlayer } from '@/context/PlayerContext'
 import { NIGERIAN_STATES } from '@/lib/utils'
 import { POSITION_LIST } from '@/lib/ratings'
+import { createCareerEntry } from '@/lib/supabase/career'
 
 type ProfileForm = {
   first_name: string
@@ -102,6 +105,103 @@ function initials(firstName: string, lastName: string) {
   return `${firstName.slice(0, 1)}${lastName.slice(0, 1)}`.toUpperCase()
 }
 
+function AddCareerModal({
+  open,
+  onClose,
+  onSaved,
+  playerId,
+}: {
+  open: boolean
+  onClose: () => void
+  onSaved: () => void
+  playerId: string
+}) {
+  const [saving, setSaving] = useState(false)
+  const [club, setClub] = useState('')
+  const [season, setSeason] = useState('')
+  const [competition, setCompetition] = useState('')
+  const [apps, setApps] = useState('')
+  const [goals, setGoals] = useState('')
+  const [assists, setAssists] = useState('')
+
+  async function submit() {
+    if (!club.trim() || !season.trim()) {
+      toast({
+        tone: 'error',
+        title: 'Club and season are required',
+        description: 'Add the club you played for and the season.',
+      })
+      return
+    }
+    setSaving(true)
+    try {
+      await createCareerEntry({
+        player_id: playerId,
+        club_name: club.trim(),
+        season: season.trim(),
+        competition: competition.trim() || null,
+        appearances: Math.max(0, Number(apps) || 0),
+        goals: Math.max(0, Number(goals) || 0),
+        assists: Math.max(0, Number(assists) || 0),
+      })
+      toast({
+        tone: 'success',
+        title: 'Career entry added',
+        description: `${club.trim()} · ${season.trim()} was saved to your career history.`,
+      })
+      setClub(''); setSeason(''); setCompetition(''); setApps(''); setGoals(''); setAssists('')
+      onSaved()
+      onClose()
+    } catch (error) {
+      toast({
+        tone: 'error',
+        title: 'Could not add career entry',
+        description: error instanceof Error ? error.message : 'Please try again.',
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Add career entry"
+      description="Add a club, competition or season to your football history."
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button icon="check" loading={saving} onClick={() => void submit()}>Add entry</Button>
+        </div>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Club / academy" required>
+          <Input value={club} onChange={e => setClub(e.target.value)} placeholder="e.g. Rivers United FC" />
+        </Field>
+        <Field label="Season" required>
+          <Input value={season} onChange={e => setSeason(e.target.value)} placeholder="e.g. 2025/26" />
+        </Field>
+        <Field label="Competition" hint="Optional">
+          <Input value={competition} onChange={e => setCompetition(e.target.value)} placeholder="e.g. NPFL" />
+        </Field>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-4">
+        <Field label="Appearances">
+          <Input type="number" inputMode="numeric" min={0} value={apps} onChange={e => setApps(e.target.value)} placeholder="0" />
+        </Field>
+        <Field label="Goals">
+          <Input type="number" inputMode="numeric" min={0} value={goals} onChange={e => setGoals(e.target.value)} placeholder="0" />
+        </Field>
+        <Field label="Assists">
+          <Input type="number" inputMode="numeric" min={0} value={assists} onChange={e => setAssists(e.target.value)} placeholder="0" />
+        </Field>
+      </div>
+    </Modal>
+  )
+}
+
 export default function PlayerProfile() {
   const {
     player,
@@ -109,11 +209,13 @@ export default function PlayerProfile() {
     loading,
     error,
     updateProfile,
+    refresh,
   } = usePlayer()
 
   const [tab, setTab] = useState<'edit' | 'preview'>('edit')
   const [form, setForm] = useState<ProfileForm | null>(null)
   const [saving, setSaving] = useState(false)
+  const [careerOpen, setCareerOpen] = useState(false)
 
   useEffect(() => {
     if (player) {
@@ -503,7 +605,23 @@ export default function PlayerProfile() {
               <CardHeader
                 title="Career history"
                 subtitle="Career records are stored separately from your profile."
+                action={
+                  player ? (
+                    <Button size="sm" icon="plus" onClick={() => setCareerOpen(true)}>
+                      Add club
+                    </Button>
+                  ) : undefined
+                }
               />
+
+              {player && (
+                <AddCareerModal
+                  open={careerOpen}
+                  onClose={() => setCareerOpen(false)}
+                  onSaved={() => void refresh()}
+                  playerId={player.id}
+                />
+              )}
 
               <div className="mt-4">
                 {typedCareer.length === 0 ? (

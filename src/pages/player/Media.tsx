@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import {
+  Badge,
   Button,
   Card,
   Icon,
@@ -10,6 +11,7 @@ import {
   toast,
 } from '@/components/ui'
 import { usePlayer } from '@/context/PlayerContext'
+import { useAuth } from '@/context/AuthContext'
 import {
   createMediaAsset,
   deleteMediaAsset,
@@ -17,6 +19,8 @@ import {
   type MediaAssetRow,
   type MediaKind,
 } from '@/lib/supabase/media'
+import { entitlementsFor } from '@/lib/entitlements'
+import { UpgradeCard } from '@/components/plan/FeatureGate'
 import { NoFeeGuarantee } from '@/components/trust'
 
 type MediaTab = 'all' | MediaKind
@@ -150,6 +154,13 @@ export default function PlayerMedia() {
     item => item.kind === 'photo',
   ).length
 
+  // Per-plan highlight-video entitlement. Scout = 0, Pro = 10, Elite/trial = unlimited.
+  const { user } = useAuth()
+  const ent = entitlementsFor(user)
+  const videoCount = highlightCount + fullMatchCount
+  const videoQuota = ent.videoQuota
+  const videoQuotaReached = videoQuota >= 0 && videoCount >= videoQuota
+
   function resetUploadForm() {
     setFile(null)
     setTitle('')
@@ -245,6 +256,27 @@ export default function PlayerMedia() {
         description: 'Give this media item a clear title.',
       })
       return
+    }
+
+    // Per-plan video entitlement. Scout has no video, Pro caps at 10, Elite is
+    // unlimited (trial = full access). Photos are not plan-capped.
+    if (kind !== 'photo') {
+      if (videoQuota === 0) {
+        toast({
+          tone: 'error',
+          title: 'Video uploads need a paid plan',
+          description: 'Highlight videos are a Pro/Elite feature. Upgrade to add video to your CV.',
+        })
+        return
+      }
+      if (videoQuotaReached) {
+        toast({
+          tone: 'error',
+          title: 'Video limit reached',
+          description: `Your ${ent.planCode === 'player_elite' ? 'Elite' : 'Pro'} plan includes up to ${videoQuota} highlight videos. Upgrade to Elite for unlimited video.`,
+        })
+        return
+      }
     }
 
     if (
@@ -427,6 +459,34 @@ export default function PlayerMedia() {
           },
         ]}
       />
+
+      {videoQuota === 0 ? (
+        <div className="mt-5">
+          <UpgradeCard
+            title="Highlight video uploads are a paid feature"
+            description="Video is the most persuasive thing on a CV. The Pro and Elite plans include highlight-video uploads."
+          />
+        </div>
+      ) : videoQuota > 0 ? (
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink-100 bg-ink-50/50 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Icon name="video" size={16} className="text-ink-400" />
+            <p className="text-xs font-semibold text-ink-700">
+              {videoCount}/{videoQuota} highlight videos used
+            </p>
+            {videoQuotaReached && (
+              <Badge tone="warn" size="sm">Limit reached</Badge>
+            )}
+          </div>
+          <a
+            href="/billing"
+            onClick={e => { e.preventDefault(); window.location.href = '/billing' }}
+            className="text-xs font-bold text-red-600 hover:underline"
+          >
+            Go Elite for unlimited video →
+          </a>
+        </div>
+      ) : null}
 
       {items.length === 0 ? (
         <Card className="mt-5 p-6">

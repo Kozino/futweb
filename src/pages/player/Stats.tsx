@@ -14,12 +14,18 @@ import {
 import { PageHeader } from '@/components/layout/PageHeader'
 import {
   Badge,
+  Button,
   Card,
   CardHeader,
+  Field,
+  Input,
+  Modal,
   Select,
   Stat,
+  toast,
 } from '@/components/ui'
 import { usePlayer } from '@/context/PlayerContext'
+import { upsertPlayerStats } from '@/lib/supabase/stats'
 
 interface MatchStatsRow {
   id?: string
@@ -124,8 +130,142 @@ function aggregateStats(rows: MatchStatsRow[]): MatchStatsRow {
   )
 }
 
+/** Numeric season-stat fields a player can self-report. */
+const STAT_NUMERIC_FIELDS: Array<[keyof MatchStatsRow, string]> = [
+  ['appearances', 'Appearances'],
+  ['minutes', 'Minutes played'],
+  ['goals', 'Goals'],
+  ['assists', 'Assists'],
+  ['shots', 'Shots'],
+  ['shots_on_target', 'Shots on target'],
+  ['pass_attempts', 'Pass attempts'],
+  ['passes_completed', 'Passes completed'],
+  ['duels', 'Duels'],
+  ['duels_won', 'Duels won'],
+  ['tackles', 'Tackles'],
+  ['interceptions', 'Interceptions'],
+  ['fouls_committed', 'Fouls committed'],
+  ['yellow_cards', 'Yellow cards'],
+  ['red_cards', 'Red cards'],
+  ['clean_sheets', 'Clean sheets'],
+  ['goals_conceded', 'Goals conceded'],
+  ['saves', 'Saves'],
+]
+
+function AddStatsModal({
+  open,
+  onClose,
+  onSaved,
+  playerId,
+}: {
+  open: boolean
+  onClose: () => void
+  onSaved: () => void
+  playerId: string
+}) {
+  const [saving, setSaving] = useState(false)
+  const [season, setSeason] = useState('')
+  const [competition, setCompetition] = useState('')
+  const [values, setValues] = useState<Record<string, string>>({})
+
+  function setValue(key: string, raw: string) {
+    const v = raw === '' ? '' : String(Math.max(0, Number(raw) || 0))
+    setValues(cur => ({ ...cur, [key]: v }))
+  }
+
+  async function submit() {
+    if (!season.trim()) {
+      toast({ tone: 'error', title: 'Season is required', description: 'Enter a season, e.g. 2025/26.' })
+      return
+    }
+    setSaving(true)
+    const num = (key: keyof MatchStatsRow) => {
+      const raw = values[String(key)]
+      return raw === undefined || raw === '' ? 0 : Number(raw)
+    }
+    try {
+      await upsertPlayerStats({
+        player_id: playerId,
+        season: season.trim(),
+        competition: competition.trim() || null,
+        appearances: num('appearances'),
+        minutes: num('minutes'),
+        goals: num('goals'),
+        assists: num('assists'),
+        shots: num('shots'),
+        shots_on_target: num('shots_on_target'),
+        pass_attempts: num('pass_attempts'),
+        passes_completed: num('passes_completed'),
+        duels: num('duels'),
+        duels_won: num('duels_won'),
+        tackles: num('tackles'),
+        interceptions: num('interceptions'),
+        fouls_committed: num('fouls_committed'),
+        yellow_cards: num('yellow_cards'),
+        red_cards: num('red_cards'),
+        clean_sheets: num('clean_sheets'),
+        goals_conceded: num('goals_conceded'),
+        saves: num('saves'),
+      })
+      toast({ tone: 'success', title: 'Season recorded', description: `${season.trim()} stats were saved to your player record.` })
+      setSeason(''); setCompetition(''); setValues({})
+      onSaved()
+      onClose()
+    } catch (error) {
+      toast({
+        tone: 'error',
+        title: 'Could not save stats',
+        description: error instanceof Error ? error.message : 'Please try again.',
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Record season statistics"
+      description="Self-reported season totals. These are shown as self-reported until independently verified."
+      size="lg"
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button icon="check" loading={saving} onClick={() => void submit()}>Save season</Button>
+        </div>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Season" required>
+          <Input value={season} onChange={e => setSeason(e.target.value)} placeholder="e.g. 2025/26" />
+        </Field>
+        <Field label="Competition / club" hint="Optional">
+          <Input value={competition} onChange={e => setCompetition(e.target.value)} placeholder="e.g. NPFL / Rivers United" />
+        </Field>
+      </div>
+
+      <div className="mt-5">
+        <p className="text-2xs font-bold uppercase tracking-wider text-ink-400">Season totals</p>
+        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+          {STAT_NUMERIC_FIELDS.map(([key, label]) => (
+            <Field key={String(key)} label={label}>
+              <Input
+                type="number" inputMode="numeric" min={0}
+                value={values[String(key)] ?? ''}
+                placeholder="0"
+                onChange={e => setValue(String(key), e.target.value)}
+              />
+            </Field>
+          ))}
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 export default function PlayerStats() {
-  const { player, stats, loading } = usePlayer()
+  const { player, stats, loading, refresh } = usePlayer()
 
 const rows = stats as unknown as MatchStatsRow[]
 
@@ -140,6 +280,7 @@ const rows = stats as unknown as MatchStatsRow[]
   }, [rows])
 
   const [selectedSeason, setSelectedSeason] = useState('')
+  const [addOpen, setAddOpen] = useState(false)
 
   const season =
     selectedSeason && seasons.includes(selectedSeason)
@@ -271,11 +412,21 @@ const rows = stats as unknown as MatchStatsRow[]
               No performance records are available.
             </p>
             <p className="mx-auto mt-1 max-w-lg text-xs leading-5 text-ink-500">
-              FutWeb is connected to your real player record. There is no demo
-              data being shown here.
+              Add your season totals below — they are recorded against your real
+              player profile and shown as self-reported until verified.
             </p>
+            <Button className="mt-4" icon="plus" onClick={() => setAddOpen(true)}>
+              Record your first season
+            </Button>
           </div>
         </Card>
+
+        <AddStatsModal
+          open={addOpen}
+          onClose={() => setAddOpen(false)}
+          onSaved={() => void refresh()}
+          playerId={player.id}
+        />
       </div>
     )
   }
@@ -288,16 +439,30 @@ const rows = stats as unknown as MatchStatsRow[]
         title="Performance"
         subtitle="Match statistics and your development over time."
         actions={
-          <Select
-            className="w-36"
-            value={season}
-            onChange={event => setSelectedSeason(event.target.value)}
-            options={seasons.map(item => ({
-              value: item,
-              label: item,
-            }))}
-          />
+          <div className="flex items-center gap-2">
+            {seasons.length > 0 && (
+              <Select
+                className="w-36"
+                value={season}
+                onChange={event => setSelectedSeason(event.target.value)}
+                options={seasons.map(item => ({
+                  value: item,
+                  label: item,
+                }))}
+              />
+            )}
+            <Button size="sm" icon="plus" onClick={() => setAddOpen(true)}>
+              Add season
+            </Button>
+          </div>
         }
+      />
+
+      <AddStatsModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onSaved={() => void refresh()}
+        playerId={player.id}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
