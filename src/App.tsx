@@ -46,14 +46,21 @@ import PlayerStats from '@/pages/player/Stats'
 import PlayerMedia from '@/pages/player/Media'
 import PlayerTrials from '@/pages/player/Trials'
 import PlayerVerify from '@/pages/player/Verify'
+import PlayerDossier from '@/pages/player/Dossier'
+import Messages from '@/pages/Messages'
+import FederationApply from '@/pages/FederationApply'
+import Academies from '@/pages/club/Academies'
+import EnterpriseRequests from '@/pages/admin/EnterpriseRequests'
 
 /* Club */
 import ClubDashboard from '@/pages/club/Dashboard'
 import Squad from '@/pages/club/Squad'
 import Discovery from '@/pages/club/Discovery'
+import Compare from '@/pages/club/Compare'
 import Shortlists from '@/pages/club/Shortlists'
 import ClubTrials from '@/pages/club/Trials'
 import ClubReports from '@/pages/club/Reports'
+import ClubAuditLog from '@/pages/club/AuditLog'
 import Staff from '@/pages/club/Staff'
 import ClubVerify from '@/pages/club/Verify'
 import PlayerDetail from '@/pages/club/PlayerDetail'
@@ -1008,6 +1015,21 @@ export default function App() {
           }
         />
 
+        {/* Standalone printable scouting dossier (Elite players) — rendered
+            without the app shell so Save-as-PDF produces a clean document. */}
+        <Route
+          path="/player/dossier"
+          element={
+            <RequireAuth>
+              <RequireRole role="player">
+                <RequireSubscription>
+                  <PlayerDossier />
+                </RequireSubscription>
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
+
 
         {/* ---------------------------------------------------------- *
          * Application workspace
@@ -1149,6 +1171,34 @@ export default function App() {
           />
 
           <Route
+            path="/club/compare"
+            element={
+              <RequireAuth>
+                <RequireRole role="club">
+                  <RequireSubscription>
+                    <Compare />
+                  </RequireSubscription>
+                </RequireRole>
+              </RequireAuth>
+            }
+          />
+
+          <Route
+            path="/club/academies"
+            element={
+              <RequireAuth>
+                <RequireRole role="club">
+                  <RequireSubscription>
+                    <RequireStaffAccess allow={['club_admin', 'club_staff']}>
+                      <Academies />
+                    </RequireStaffAccess>
+                  </RequireSubscription>
+                </RequireRole>
+              </RequireAuth>
+            }
+          />
+
+          <Route
             path="/club/shortlists"
             element={
               <RequireAuth>
@@ -1181,6 +1231,21 @@ export default function App() {
                 <RequireRole role="club">
                   <RequireSubscription>
                     <ClubReports />
+                  </RequireSubscription>
+                </RequireRole>
+              </RequireAuth>
+            }
+          />
+
+          <Route
+            path="/club/audit"
+            element={
+              <RequireAuth>
+                <RequireRole role="club">
+                  <RequireSubscription>
+                    <RequireStaffAccess allow={['club_admin', 'club_staff']}>
+                      <ClubAuditLog />
+                    </RequireStaffAccess>
                   </RequireSubscription>
                 </RequireRole>
               </RequireAuth>
@@ -1297,6 +1362,17 @@ export default function App() {
             }
           />
 
+          <Route
+            path="/admin/enterprise"
+            element={
+              <RequireAuth>
+                <RequireRole role="admin">
+                  <EnterpriseRequests />
+                </RequireRole>
+              </RequireAuth>
+            }
+          />
+
 
           {/* Account */}
 
@@ -1330,7 +1406,26 @@ export default function App() {
               </RequireAuth>
             }
           />
+
+          <Route
+            path="/messages"
+            element={
+              <RequireAuth>
+                <Messages />
+              </RequireAuth>
+            }
+          />
         </Route>
+
+        {/* Federation / enterprise-access application (standalone) */}
+        <Route
+          path="/federation/apply"
+          element={
+            <RequireAuth>
+              <FederationApply />
+            </RequireAuth>
+          }
+        />
 
 
         {/* Catch-all */}

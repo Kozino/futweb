@@ -95,3 +95,18 @@
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   .safe-b { padding-bottom: env(safe-area-inset-bottom); }
 }
+
+/* ------------------------------------------------------------------ *
+ * Print support — used by the PDF scouting dossier page.
+ * ------------------------------------------------------------------ */
+@media print {
+  .no-print { display: none !important; }
+  body, .print-area, .dossier {
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-area { max-width: 100% !important; padding: 0 !important; }
+  .dossier { box-shadow: none !important; border-radius: 0 !important; margin: 0 !important; }
+  .preserve-ink { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
