@@ -160,6 +160,19 @@ export function hasFeature(user: Parameters<typeof entitlementsFor>[0], feature:
   return e.level >= 0 && e.granted.has(feature)
 }
 
+/**
+ * Whether a club can self-publish a verified (open) trial right now. Requires
+ * the club to be an entity-verified organisation AND on a plan/state that grants
+ * 'verified_trial_postings' (Pro Club/Enterprise, or full-access trial).
+ */
+export function clubMayPublishVerifiedTrials(
+  user: Parameters<typeof entitlementsFor>[0],
+  entityVerified: boolean,
+): boolean {
+  if (!entityVerified) return false
+  return hasFeature(user, 'verified_trial_postings')
+}
+
 /** Lowest tier label text used in upgrade prompts. */
 export function upgradeTarget(feature: EntitlementKey): string {
   const f = FEATURE_CATALOG.find(x => x.key === feature)
