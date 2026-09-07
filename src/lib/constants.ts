@@ -139,6 +139,7 @@ export const NAV_BY_ROLE = {
     { label: 'Discovery', to: '/club/discovery', icon: 'search' },
     { label: 'Compare', to: '/club/compare', icon: 'chart' },
     { label: 'Academies', to: '/club/academies', icon: 'building', roles: ['club_admin'] },
+    { label: 'Developer', to: '/club/integrations', icon: 'zap', roles: ['club_admin'] },
     { label: 'Shortlists', to: '/club/shortlists', icon: 'list' },
     { label: 'Trials', to: '/club/trials', icon: 'target' },
     { label: 'Reports', to: '/club/reports', icon: 'doc' },
