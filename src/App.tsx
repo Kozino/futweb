@@ -50,6 +50,7 @@ import PlayerDossier from '@/pages/player/Dossier'
 import Messages from '@/pages/Messages'
 import FederationApply from '@/pages/FederationApply'
 import Academies from '@/pages/club/Academies'
+import Integrations from '@/pages/club/Integrations'
 import EnterpriseRequests from '@/pages/admin/EnterpriseRequests'
 
 /* Club */
@@ -1189,14 +1190,27 @@ export default function App() {
               <RequireAuth>
                 <RequireRole role="club">
                   <RequireSubscription>
-                    <RequireStaffAccess allow={['club_admin', 'club_staff']}>
-                      <Academies />
-                    </RequireStaffAccess>
-                  </RequireSubscription>
-                </RequireRole>
-              </RequireAuth>
-            }
-          />
+                  <RequireStaffAccess allow={['club_admin', 'club_staff']}>
+                    <Academies />
+                  </RequireStaffAccess>
+                </RequireSubscription>
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/club/integrations"
+          element={
+            <RequireAuth>
+              <RequireRole role="club">
+                <RequireSubscription>
+                  <Integrations />
+                </RequireSubscription>
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
 
           <Route
             path="/club/shortlists"
