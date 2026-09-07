@@ -183,13 +183,17 @@ function RequireStaffAccess({
   children: ReactNode
 }) {
   const { user } = useAuth()
-  const { role, loading } = useClub()
+  const { role, loading, ready } = useClub()
 
   if (user?.accountType !== 'club' || user.role === 'admin') {
     return <>{children}</>
   }
 
-  if (loading) {
+  // Hold on a skeleton until the club/membership has actually been resolved
+  // for this user. Gating on `ready` (not just `loading`) prevents a redirect
+  // back to /club on a hard refresh / deep-link to staff, verify or billing —
+  // where the club is legitimately still loading on first render.
+  if (!ready || loading) {
     return <Skeleton className="h-64 w-full" />
   }
 
@@ -248,6 +252,13 @@ function SmartRedirect() {
     return <Navigate to="/login" replace />
   }
 
+  // Site admins never go through the player/club onboarding wizard — their
+  // console is their destination regardless of onboarding flags. (An admin
+  // account can carry account_type 'player' from signup while role is 'admin'.)
+  if (user.role === 'admin') {
+    return <Navigate to="/admin" replace />
+  }
+
   if (!user.onboardingComplete) {
     return (
       <Navigate
@@ -264,11 +275,9 @@ function SmartRedirect() {
   return (
     <Navigate
       to={
-        user.role === 'admin'
-          ? '/admin'
-          : user.accountType === 'club'
-            ? '/club'
-            : '/player'
+        user.accountType === 'club'
+          ? '/club'
+          : '/player'
       }
       replace
     />
@@ -532,14 +541,19 @@ function Onboarding() {
 
   function finish() {
     if (isClub) {
-      /*
-       * Club onboarding will be converted to the real
-       * clubs/org_members flow in the club data-layer batch.
-       */
-      updateUser({
-        onboardingComplete: true,
-      })
+      // Persist onboarding_complete to the profile so a club owner isn't
+      // bounced back through onboarding on their next sign-in. Local update
+      // alone only lasts for the current session.
+      const persistClubOnboarding = async () => {
+        if (!supabase || !user) return
+        await supabase
+          .from('profiles')
+          .update({ onboarding_complete: true })
+          .eq('id', user.id)
+      }
 
+      updateUser({ onboardingComplete: true })
+      void persistClubOnboarding()
       nav('/club')
       return
     }
