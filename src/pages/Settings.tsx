@@ -28,7 +28,53 @@ export default function Settings() {
   const [revoking, setRevoking] = useState(false)
   const [requesting, setRequesting] = useState<'export' | 'deletion' | null>(null)
 
+  interface InboxItem {
+    id: string; kind: string; title: string; body?: string | null
+    link?: string | null; read_at?: string | null; created_at: string
+  }
+  const [inbox, setInbox] = useState<InboxItem[]>([])
+  const [inboxLoaded, setInboxLoaded] = useState(false)
+
   const unsynced = pending.filter(p => !p.synced).length
+
+  // Platform messages addressed to this user (created server-side via
+  // admin_send_notification). Read-only + mark-read from the client.
+  useEffect(() => {
+    let cancelled = false
+    if (!hasSupabase || !supabase || !user) {
+      setInboxLoaded(true)
+      return
+    }
+    ;(async () => {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(30)
+      if (!cancelled) {
+        if (!error) setInbox((data as InboxItem[] | null) ?? [])
+        setInboxLoaded(true)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [user])
+
+  async function markInboxRead() {
+    if (!supabase || !user) return
+    const now = new Date().toISOString()
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read_at: now })
+      .eq('user_id', user.id)
+      .is('read_at', null)
+    if (error) {
+      toast({ tone: 'error', title: 'Could not update notifications', description: error.message })
+      return
+    }
+    setInbox(items => items.map(i => ({ ...i, read_at: i.read_at ?? now })))
+    toast({ tone: 'success', title: 'Marked as read' })
+  }
 
   // Load whatever isn't already on the local session (locale + saved prefs).
   useEffect(() => {
@@ -121,7 +167,12 @@ export default function Settings() {
     }
     setRequesting(kind)
     try {
-      const { error } = await supabase.from('data_requests').insert({ user_id: user.id, kind })
+      // Record a data-subject request (NDPA 2023). The real table is
+      // data_subject_requests (kind: export | erasure | rectification) with a
+      // subject_id = auth.uid(), protected by the dsr_rw RLS policy.
+      const { error } = await supabase
+        .from('data_subject_requests')
+        .insert({ subject_id: user.id, kind: kind === 'deletion' ? 'erasure' : 'export' })
       if (error) throw error
       toast({
         tone: kind === 'export' ? 'success' : 'warning',
@@ -226,6 +277,48 @@ export default function Settings() {
                 <Toggle checked={notify[k]} disabled={notifySaving === k} onChange={v => void toggleNotify(k, v)} />
               </div>
             ))}
+          </div>
+
+          <div className="mt-4 border-t border-ink-100 pt-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-ink-400">
+                Recent messages
+              </h4>
+              {inbox.some(i => !i.read_at) && (
+                <Button size="sm" variant="ghost" onClick={() => void markInboxRead()}>Mark all read</Button>
+              )}
+            </div>
+
+            {inboxLoaded && inbox.length === 0 ? (
+              <p className="mt-2 text-xs text-ink-400">No platform messages yet.</p>
+            ) : (
+              <div className="mt-2 space-y-1.5">
+                {inbox.map(item => (
+                  <div
+                    key={item.id}
+                    className={`flex items-start gap-3 rounded-xl border p-3 ${item.read_at ? 'border-ink-100' : 'border-red-200 bg-red-50/40'}`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-ink-900">
+                        {item.title}
+                        {!item.read_at && (
+                          <span className="ml-2 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" />
+                        )}
+                      </p>
+                      {item.body && <p className="mt-0.5 text-2xs leading-relaxed text-ink-500">{item.body}</p>}
+                      <p className="mt-1 text-2xs text-ink-400">
+                        {item.created_at ? new Date(item.created_at).toLocaleString() : ''}
+                      </p>
+                    </div>
+                    {item.link && (
+                      <Button size="sm" variant="outline" onClick={() => { window.location.href = item.link as string }}>
+                        Open
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </Card>
 
