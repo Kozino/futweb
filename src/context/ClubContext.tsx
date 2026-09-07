@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -54,49 +55,56 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // The id of the user whose club/membership we last resolved. Used so that a
+  // background change to the AuthContext `user` OBJECT (same user id, e.g. an
+  // unrelated profile refresh) does NOT re-run this fetch — that churn was
+  // flipping `ready` and causing role-gated routes (like /billing) to unmount
+  // and remount in an infinite loop.
+  const resolvedForRef = useRef<string | null>(null)
+
+  const userId = user?.id ?? null
+  const accountType = user?.accountType ?? null
+
   const refresh = useCallback(async () => {
     if (!hasSupabase) {
-      setClub(null)
-      setMembership(null)
-      setSquad([])
-      setError(null)
+      setClub(null); setMembership(null); setSquad([]); setError(null)
+      resolvedForRef.current = null
       setReady(true)
       return
     }
     // While auth is still resolving (no user yet) we are NOT "ready": role-gated
     // pages must keep showing a skeleton, not treat a not-yet-loaded club as
     // "user has no access" and redirect.
-    if (!user) {
-      setClub(null)
-      setMembership(null)
-      setSquad([])
-      setError(null)
+    if (!userId) {
+      setClub(null); setMembership(null); setSquad([]); setError(null)
+      resolvedForRef.current = null
       setReady(false)
       return
     }
-    if (user.accountType !== 'club') {
-      setClub(null)
-      setMembership(null)
-      setSquad([])
-      setError(null)
+    if (accountType !== 'club') {
+      setClub(null); setMembership(null); setSquad([]); setError(null)
+      resolvedForRef.current = userId
       setReady(true)
       return
     }
 
-    setLoading(true)
+    const isNewUser = resolvedForRef.current !== userId
     setError(null)
-    // Not "ready" again until this fetch resolves, so role-gated routes hold
-    // on a skeleton instead of mis-redirecting during the load window.
-    setReady(false)
+    // Only show the loading skeleton when we first resolve this user. Refreshing
+    // for the SAME user (e.g. after an edit, or an upstream object churn) should
+    // not drop the page to a skeleton — doing so unmounted/remounted gated routes.
+    if (isNewUser) setLoading(true)
+    if (isNewUser) setReady(false)
 
     try {
       const [currentClub, currentMembership] = await Promise.all([
-        getMyClub(user.id),
-        getMyClubMembership(user.id),
+        getMyClub(userId),
+        getMyClubMembership(userId),
       ])
 
       setClub(currentClub)
       setMembership(currentMembership)
+      resolvedForRef.current = userId
 
       if (!currentClub) {
         setSquad([])
@@ -116,7 +124,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       setLoading(false)
       setReady(true)
     }
-  }, [user])
+  }, [userId, accountType])
 
   useEffect(() => {
     void refresh()
