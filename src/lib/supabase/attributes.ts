@@ -94,6 +94,18 @@ export async function createSelfRatingSnapshot(
 
   if (error) throw error
 
+  // Keep the canonical score on the player's row in sync. Every list that
+  // orders/reads by players.futweb_score (dashboard, admin, discovery) relies
+  // on this column, and it was left permanently NULL otherwise. Best-effort so
+  // a failed mirror-update never discards an otherwise saved snapshot.
+  await supabase
+    .from('players')
+    .update({
+      futweb_score: input.futwebScore,
+      confidence: input.confidence ?? 0,
+    })
+    .eq('id', input.playerId)
+
   return data
 }
 

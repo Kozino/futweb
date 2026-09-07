@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { resolveEntitlements } from '@/lib/entitlements'
 
 export async function getClubPlayers(clubId: string) {
   if (!supabase) {
@@ -169,7 +170,45 @@ export async function createTrialPosting(input: {
     throw new Error('Supabase is not configured.')
   }
 
-  const { data, error } = await supabase
+  // A trial may only ever be zero-fee (enforced on the client AND by a DB
+  // check constraint server-side). Players can only see/apply to postings that
+  // are status='open' AND verified=true (see RLS trial_apps_insert). So a
+  // posting must reach that state for the lifecycle to work.
+  //
+  // Publication rule keeps the trust model AND the plan tier intact. A posting
+  // only becomes open + verified (so players can see/apply — RLS trial_apps_insert
+  // requires status='open' AND verified=true) when BOTH hold:
+  //   1. The club is ENTITY-VERIFIED (CAC + NFF/state FA confirmed by an admin).
+  //   2. The club's plan entitles it to 'verified_trial_postings' (Pro Club /
+  //      Enterprise; trial = full club access). An Academy club is not
+  //      trusted to self-publish a verified trial — its posting stays
+  //      'pending_verification' until it upgrades or an admin verifies it.
+  let entityVerified = false
+  let ownerSubStatus: string | null = null
+  let ownerPlanCode: string | null = null
+  if (supabase) {
+    const { data: club } = await supabase
+      .from('clubs')
+      .select('entity_verified, owner_id')
+      .eq('id', input.club_id)
+      .maybeSingle()
+    entityVerified = Boolean(club?.entity_verified)
+    if (club?.owner_id) {
+      const { data: owner } = await supabase
+        .from('profiles')
+        .select('sub_status, plan_code')
+        .eq('id', club.owner_id)
+        .maybeSingle()
+      ownerSubStatus = owner?.sub_status ?? null
+      ownerPlanCode = owner?.plan_code ?? null
+    }
+  }
+
+  const planAllowsVerifiedPostings = resolveEntitlements('club', ownerSubStatus, ownerPlanCode)
+    .granted.has('verified_trial_postings')
+  const canPublish = entityVerified && planAllowsVerifiedPostings
+
+  const { data, error } = await supabase!
     .from('trial_postings')
     .insert({
       club_id: input.club_id,
@@ -181,7 +220,8 @@ export async function createTrialPosting(input: {
       location: input.location.trim(),
       trial_date: input.trial_date,
       fee_charged_to_player: 0,
-      status: 'pending_verification',
+      status: canPublish ? 'open' : 'pending_verification',
+      verified: canPublish,
     })
     .select('*')
     .single()

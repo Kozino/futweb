@@ -197,14 +197,24 @@ export async function enrichPlayers(
 
   const out: EnrichedPlayer[] = []
 
+  // A dedicated player_attributes row only counts if it actually holds real
+  // numbers. Onboarding can leave an empty row (every attribute NULL), and
+  // attrsFromRecord maps those NULLs to 0 — which would collapse a player's
+  // genuine score to near-zero. In that case fall back to the attributes from
+  // their newest rating snapshot, which is what the player's own Attributes
+  // page displays. This keeps every view of the score in agreement.
+  const hasRealAttributes = (row: Record<string, unknown> | undefined | null): boolean =>
+    !!row && ATTR_KEYS.some(k => typeof row[k] === 'number')
+
   for (const p of playerRows) {
     const age = ageFrom(p.dob)
     const attrRows = attrsByPlayer.get(p.id) ?? []
     const latestAttrsRow = attrRows[0]
-    // Fall back to the newest snapshot's attributes if no dedicated row exists.
     const snapRows = snapByPlayer.get(p.id) ?? []
     const snapAttrs = (snapRows[0]?.attributes as Record<string, unknown> | undefined) ?? null
-    const attributes = attrsFromRecord(latestAttrsRow ?? snapAttrs)
+    const attributes = attrsFromRecord(
+      hasRealAttributes(latestAttrsRow) ? latestAttrsRow : snapAttrs,
+    )
 
     const statsRows = statsByPlayer.get(p.id) ?? []
     const matchStats = sumStats(statsRows)
