@@ -74,6 +74,7 @@ import Verification from '@/pages/admin/Verification'
 import Subscriptions from '@/pages/admin/Subscriptions'
 import Disputes from '@/pages/admin/Disputes'
 import Audit from '@/pages/admin/Audit'
+import FederationApi from '@/pages/admin/FederationApi'
 
 /* Account */
 import Billing from '@/pages/billing/Billing'
@@ -1382,6 +1383,17 @@ export default function App() {
               <RequireAuth>
                 <RequireRole role="admin">
                   <EnterpriseRequests />
+                </RequireRole>
+              </RequireAuth>
+            }
+          />
+
+          <Route
+            path="/admin/federation-api"
+            element={
+              <RequireAuth>
+                <RequireRole role="admin">
+                  <FederationApi />
                 </RequireRole>
               </RequireAuth>
             }
