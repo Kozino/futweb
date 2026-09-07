@@ -17,6 +17,12 @@ const ACTION_TONE: Record<string, 'neutral' | 'trust' | 'red' | 'gold' | 'blue'>
   'payment.succeeded': 'trust',
   'user.login': 'neutral',
   'trial.posting.verified': 'trust',
+  'trial.posting.rejected': 'red',
+  'academy.linked': 'blue',
+  'academy.unlinked': 'neutral',
+  'apikey.created': 'gold',
+  'apikey.revoked': 'red',
+  'enterprise.requested': 'gold',
 }
 
 export default function Audit() {
