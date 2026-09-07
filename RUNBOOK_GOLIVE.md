@@ -38,11 +38,16 @@ Open the Supabase SQL editor (or `psql`) and run:
 1. **`supabase/sql/reconcile_futweb_score.sql`** — score backfill (fills the NULL `players.futweb_score`).
 2. **`supabase/sql/futweb_test_account_fixes.sql`** — one-time fixes to the test club/admin accounts.
 3. **`supabase/sql/futweb_subscription_expiry.sql`** — automatic trial/grace expiry (NEW). Adds `expire_overdue_subscriptions()` (global sweep, for a scheduler) and `expire_my_subscription()` (called by the app on every sign-in / app load, so a lapsed trial is revoked on the next visit even without a scheduler). Optionally schedules an hourly `pg_cron` job if the extension is enabled.
+4. **`supabase/migrations/0011_trial_review_pipeline.sql`** — trial publication pipeline (NEW). Closes the dead-end where a club's trial stayed `pending_verification` forever. Adds `trial_may_publish(uuid)`, `publish_eligible_pending_trials(uuid)`, `admin_verify_trial(uuid,text)`, `admin_reject_trial(uuid,text)`, re-defines `admin_verify_club` to auto-publish eligible pending postings, and a guard trigger so a club can never self-verify a posting unless it actually qualifies (entity-verified + Pro Club/Enterprise/trial). **Run it after script 3.**
 
-All three are idempotent and safe to re-run.
+All are idempotent and safe to re-run.
 
 > Until script 3 is applied, the app still works, but a lapsed trial is not
-> auto-expired (the client hook simply no-ops if the function is absent).
+> auto-expired (the client hook simply no-ops if the function is absent). Until
+> migration 0011 is applied, the admin Approve/Reject buttons and the club
+> "Publish now (requirements met)" re-check call RPCs that do not yet exist
+> (they surface a friendly error and no-op) — pending postings stay pending
+> until the migration runs.
 
 ---
 
@@ -61,6 +66,29 @@ Implemented in code (no SQL needed). See `src/lib/entitlements.ts`:
   Enterprise — an entity-verified club on the Academy plan can't self-publish a
   verified/open trial; it posts as pending). Extend by wrapping more actions in
   the `<FeatureGate feature="...">` component.
+
+---
+
+## 2c. Trial verification pipeline (NEW — fixes the "stuck pending trial")
+**Before this fix:** a club whose posting did not auto-publish (not entity-verified,
+or on the Academy plan) was created `pending_verification` and **nothing could ever
+promote it** — a permanent invisible dead-end.
+
+**After this fix** (needs migration 0011), a pending posting is published through:
+1. **Auto** — the moment the club is entity-verified **and** on Pro Club/Enterprise
+   (or trial), the pending posting flips to `open` + `verified`. `admin_verify_club`
+   does this automatically; the club can also hit **"Publish now (requirements met)"**
+   on `/club/trials` to self-heal after it upgrades or gets verified.
+2. **Admin review** — Admin → Verification now lists **"Trial postings awaiting
+   publication."** A moderator Approves (optional note) or Rejects (required reason)
+   a posting; the club owner is notified either way. Approving is a manual override
+   used when a moderator judges the posting legitimate even though an automated rule
+   couldn't (e.g. an Academy club).
+
+**Sanity check after deploy:** post a trial from an entity-**un**verified or Academy
+club → it shows **"Pending verification"** with a checklist (verify org / plan) on
+`/club/trials`; verify the club entity as admin → the trial flips to **open +
+verified** and appears to players; a rejected posting is cancelled with a reason.
 
 ---
 
@@ -126,6 +154,33 @@ edge functions. Ensure:
 
 The "Manage" button on Admin → Subscriptions is intentionally a stub — wire it
 to `flutterwave` endpoints (refund/pause/change) when you have a live account.
+
+---
+
+## 5b. Hotfix (Sep 2026): club `/billing` (and other club pages) reload loop
+
+**Symptom:** on a club account the `/billing` page (and any club route under a
+`RequireStaffAccess` guard) unmounts/remounts ~15×/sec indefinitely, firing an
+ever-growing stream of `profiles` / `payments` / `subscriptions` requests.
+
+**Root cause:** `Billing`'s mount effect calls `refreshProfile()`, which makes
+`AuthContext` return a **new** `user` object (same `id`). `ClubContext.refresh`
+had `[user]` as a dependency, so the identity change re-ran the club fetch,
+which toggled `ready` false→true. `RequireStaffAccess` renders `<Skeleton>` while
+`!ready`, so the gated child (Billing) unmounted and remounted — restarting its
+mount effect → infinite loop. Players never hit it because their path returns
+early from `RequireStaffAccess` with no `ready` churn.
+
+**Fix (`src/context/ClubContext.tsx`):** `refresh` now depends on `user.id` +
+`accountType` (not the whole `user` object), and only drops to the loading
+skeleton on the **first** resolution of a given user id
+(`resolvedForRef` ref). Refresh for the same user is now a silent background
+update that never flips `ready` to false, so guarded routes stay mounted.
+
+**Verification:** with a club logged in, `/billing` shows flat request counts
+(`profiles`/`payments`/`subscriptions` stay at a small constant value with no
+growth) and page errors = 0. `/club`, `/club/staff`, `/club/verify`, `/billing`,
+`/club/squad` all render and deep-link correctly with no remount.
 
 ---
 
