@@ -75,24 +75,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     ;(async () => {
       if (hasSupabase && supabase) {
+        const client = supabase
+
+        // Enforce trial/grace expiry on the client: before we read the profile,
+        // ask the server to flip this user's status to 'expired' if their
+        // trial/grace window has passed. Idempotent and a no-op otherwise. If
+        // the function isn't deployed yet this is safely ignored.
+        const expireIfDue = async () => {
+          try { await client.rpc('expire_my_subscription') } catch { /* ignore if not deployed */ }
+        }
+
+        const loadProfile = async (userId: string, email: string) => {
+          await expireIfDue()
+          const { data: profile } = await client
+            .from('profiles').select('*').eq('id', userId).single()
+          return profile ? mapProfile(profile, email) : null
+        }
+
         const { data } = await supabase.auth.getSession()
         if (cancelled) return
         if (data.session) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', data.session.user.id)
-            .single()
-          if (!cancelled && profile) setUser(mapProfile(profile, data.session.user.email ?? ''))
+          const profile = await loadProfile(data.session.user.id, data.session.user.email ?? '')
+          if (!cancelled && profile) setUser(profile)
         }
         if (!cancelled) setLoading(false)
 
-        const client = supabase
         const { data: sub } = client.auth.onAuthStateChange(async (_e, session) => {
           if (!session) { setUser(null); return }
-          const { data: profile } = await client
-            .from('profiles').select('*').eq('id', session.user.id).single()
-          setUser(profile ? mapProfile(profile, session.user.email ?? '') : null)
+          const profile = await loadProfile(session.user.id, session.user.email ?? '')
+          setUser(profile)
         })
         return () => sub.subscription.unsubscribe()
       } else {
@@ -117,6 +128,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Generic error on purpose: never reveal whether an email exists (user enumeration).
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error || !data.user) return { error: 'Invalid email or password.' }
+      // Expire this user's trial/grace if it has lapsed, then read the real status.
+      try { await supabase.rpc('expire_my_subscription') } catch { /* ignore if not deployed */ }
       const { data: profile } = await supabase
         .from('profiles')
         .select('*')
