@@ -3,10 +3,70 @@ import { useSearchParams } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge, Button, Card, EmptyState, Icon, Skeleton, Tabs, Toggle, toast } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
+import { entitlementsFor, FEATURE_CATALOG, type EntitlementAudience } from '@/lib/entitlements'
 import { ANNUAL_DISCOUNT_MONTHS, PLANS, annualPrice } from '@/lib/constants'
 import { cn, formatDate, formatNGN } from '@/lib/utils'
 import { hasSupabase, supabase } from '@/lib/supabase'
 import { getMyPayments, getMySubscription, type PaymentRow } from '@/lib/supabase/billing'
+
+function planLabel(audience: EntitlementAudience, level: number): string {
+  return audience === 'player'
+    ? level >= 2 ? 'Elite' : level >= 1 ? 'Pro' : 'Scout'
+    : level >= 2 ? 'Enterprise' : level >= 1 ? 'Pro Club' : 'Academy'
+}
+
+/** Visible "what my plan unlocks" panel so per-plan gating is transparent. */
+function FeatureEntitlementPanel({ audience }: { audience: EntitlementAudience }) {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
+  const ent = entitlementsFor(user)
+  const live = !isAdmin && ent.level >= 0
+  return (
+    <Card className="mt-6 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-bold">What your plan includes</h3>
+          <p className="mt-0.5 text-2xs text-ink-500">
+            {isAdmin
+              ? 'Site admins have unrestricted access.'
+              : !live
+                ? 'No active plan — features are locked until you subscribe.'
+                : ent.trial
+                  ? `Trial — you currently have full ${audience === 'player' ? 'Elite' : 'Pro Club'} access.`
+                  : `Your features on ${planLabel(audience, ent.level)}${ent.level < (audience === 'player' ? 2 : 1) ? '. Upgrade to unlock the rest.' : '.'}`}
+          </p>
+        </div>
+        {audience === 'player' && ent.videoQuota > 0 && (
+          <Badge tone="neutral" size="sm">Up to {ent.videoQuota} highlight videos</Badge>
+        )}
+        {audience === 'player' && ent.videoQuota === -1 && <Badge tone="trust" size="sm">Unlimited video</Badge>}
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        {FEATURE_CATALOG.filter(f => f.audience === audience).map(f => {
+          const included = isAdmin || (live && ent.granted.has(f.key))
+          return (
+            <div
+              key={f.key}
+              className={`flex items-start gap-2.5 rounded-xl border p-3 ${included ? 'border-ink-100' : 'border-ink-100 bg-ink-50/60'}`}
+            >
+              <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full ${included ? 'bg-trust-500/15 text-trust-600' : 'bg-ink-100 text-ink-400'}`}>
+                <Icon name={included ? 'check' : 'lock'} size={12} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className={`text-xs font-bold ${included ? 'text-ink-900' : 'text-ink-400'}`}>
+                  {f.label}
+                  {!included && <span className="ml-2 font-semibold text-red-500">On {planLabel(audience, f.minLevel)}</span>}
+                </p>
+                <p className="text-2xs leading-relaxed text-ink-500">{f.desc}</p>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </Card>
+  )
+}
 
 const CHANNEL_LABEL: Record<string, string> = {
   card: 'Card',
@@ -207,6 +267,8 @@ export default function Billing() {
               )
             })}
           </div>
+
+          <FeatureEntitlementPanel audience={audience} />
 
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             {[
