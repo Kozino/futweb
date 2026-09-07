@@ -39,8 +39,21 @@ Open the Supabase SQL editor (or `psql`) and run:
 2. **`supabase/sql/futweb_test_account_fixes.sql`** — one-time fixes to the test club/admin accounts.
 3. **`supabase/sql/futweb_subscription_expiry.sql`** — automatic trial/grace expiry (NEW). Adds `expire_overdue_subscriptions()` (global sweep, for a scheduler) and `expire_my_subscription()` (called by the app on every sign-in / app load, so a lapsed trial is revoked on the next visit even without a scheduler). Optionally schedules an hourly `pg_cron` job if the extension is enabled.
 4. **`supabase/migrations/0011_trial_review_pipeline.sql`** — trial publication pipeline (NEW). Closes the dead-end where a club's trial stayed `pending_verification` forever. Adds `trial_may_publish(uuid)`, `publish_eligible_pending_trials(uuid)`, `admin_verify_trial(uuid,text)`, `admin_reject_trial(uuid,text)`, re-defines `admin_verify_club` to auto-publish eligible pending postings, and a guard trigger so a club can never self-verify a posting unless it actually qualifies (entity-verified + Pro Club/Enterprise/trial). **Run it after script 3.**
+5. **`supabase/migrations/0012_profile_views.sql`** — profile view tracking (NEW). Adds `profile_views` table + RLS, `record_profile_view(uuid)` (security-definer write; drops self-views, derives the viewer's club from auth, rate-limits to 1/player/24h, no direct insert policy) and `my_profile_views(int)` (returns only the caller's own views). Drives the player "Who viewed your profile" panel (Pro+).
+6. **`supabase/migrations/0013_club_audit.sql`** — club audit log & export (NEW). Adds `log_club_activity(uuid,text,jsonb)` and `club_audit_log(uuid,int)` security-definer RPCs (club-scoped read only for the caller's own club), plus triggers that auto-record trial posts/status changes, staff add/role-change/remove, and scout reports into the club's audit slice. Drives Club → Audit log / Export CSV (Pro Club).
+7. **`supabase/migrations/0014_messaging.sql`** — direct player↔club messaging (NEW). Adds `conversations` + `messages` tables and security-definer RPCs `open_conversation`, `send_message`, `mark_conversation_read`, `my_conversations`, `conversation_messages`. Messaging is gated to **Elite players** (or full trial/admin) and only entity-verified clubs participate; minors require guardian consent. No direct table policy — participants are always re-derived from `auth.uid()`. Drives `/messages` for both roles.
+8. **`supabase/migrations/0015_federation.sql`** — Federation group structure + enterprise-access (NEW). Adds `clubs.parent_club_id`, recursive access helpers (`user_in_club_tree`), `link_academy`/`unlink_academy`/`federation_children`/`federation_academy_squad`, extends `can_view_player` so a parent can see child-academy players, and an `enterprise_requests` table + `submit_enterprise_request` for the human/contracted Federation offerings (SSO, data residency, SLA, NAM, NFF onboarding, API/webhooks).
 
 All are idempotent and safe to re-run.
+
+> Until script 3 is applied, the app still works, but a lapsed trial is not
+> auto-expired (the client hook simply no-ops if the function is absent). Until
+> migration 0011 is applied, the admin Approve/Reject buttons and the club
+> "Publish now (requirements met)" re-check call RPCs that do not yet exist
+> (they surface a friendly error and no-op) — pending postings stay pending
+> until the migration runs. Client calls to 0012/0013 RPCs also no-op with a
+> friendly error until those migrations run, so a deploy before applying them
+> will not break the app.
 
 > Until script 3 is applied, the app still works, but a lapsed trial is not
 > auto-expired (the client hook simply no-ops if the function is absent). Until
@@ -89,6 +102,31 @@ promote it** — a permanent invisible dead-end.
 club → it shows **"Pending verification"** with a checklist (verify org / plan) on
 `/club/trials`; verify the club entity as admin → the trial flips to **open +
 verified** and appears to players; a rejected posting is cancelled with a reason.
+
+---
+
+## 2d. Federation / group structure (NEW — migration 0015)
+Gives the Federation (club_enterprise) tier a real multi-academy group:
+- **Club → Academies** (`/club/academies`, requires Federation-level access): add/remove child
+  academies by club id and view each academy's squad + headcounts for group oversight. Child
+  academies keep independent ownership/staff/billing.
+- **Federation overview**: a parent can see any child academy's players (read-only) via the
+  extended `can_view_player`.
+- **Enterprise access** (`/federation/apply`, authed): a request form for the human/contracted
+  Federation items (SSO, data residency, API/webhooks, SLA, NAM, NFF onboarding). Rows land in
+  `enterprise_requests`; **Admin → Enterprise** reviews them and updates status.
+
+**Honest plan copy:** the Federation tier features now split into product (group management, which
+works) vs clearly-labelled **"Add-on"** items that are arranged via the enterprise agreement — no
+longer implying SSO/SLA/etc. are auto-included on signup.
+
+> Custom roles/RBAC and a real API-key + webhook-delivery system are still scaffolding (auth-only
+> placeholders) — they need a live Supabase Edge Function + auth strategy to be production. See the
+> Federation roadmap note.
+
+**Sanity check after deploy:** on a Federation/trial club → `/club/academies` add an academy club id
+→ it lists with headcounts; expand its squad. Submit a request at `/federation/apply` → confirm it
+shows under Admin → Enterprise.
 
 ---
 
