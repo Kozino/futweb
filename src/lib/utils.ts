@@ -16,11 +16,16 @@ export function formatUSD(amount: number) {
 }
 
 export function formatDate(d: string | Date, opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }) {
-  return new Intl.DateTimeFormat('en-NG', opts).format(new Date(d))
+  const date = new Date(d)
+  if (Number.isNaN(date.getTime())) return '—'
+  return new Intl.DateTimeFormat('en-NG', opts).format(date)
 }
 
 export function relativeTime(d: string | Date) {
-  const diff = Date.now() - new Date(d).getTime()
+  const date = new Date(d)
+  if (Number.isNaN(date.getTime())) return '—'
+
+  const diff = Date.now() - date.getTime()
   const mins = Math.round(diff / 60000)
   if (mins < 1) return 'just now'
   if (mins < 60) return `${mins}m ago`
