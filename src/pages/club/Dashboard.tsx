@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Avatar, Badge, Button, Card, CardHeader, EmptyState, Icon, ProgressBar, Skeleton, Stat } from '@/components/ui'
+import { Avatar, Badge, Button, Card, CardHeader, EmptyState, Icon, ProgressBar, Skeleton, Stat, toast } from '@/components/ui'
+import { useAuth } from '@/context/AuthContext'
 import { useClub } from '@/context/ClubContext'
 import { hasSupabase } from '@/lib/supabase'
 import { getClubSquad, type EnrichedPlayer } from '@/lib/supabase/workspace'
 import { getClubTrialsWithClubs } from '@/lib/supabase/recruitment'
+import { CLUB_LOGO_MAX_BYTES, uploadClubLogo } from '@/lib/supabase/clubs'
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts'
 
 function posGroup(p: string): string {
@@ -16,12 +18,48 @@ function posGroup(p: string): string {
 }
 
 export default function ClubDashboard() {
-  const { club } = useClub()
+  const { user } = useAuth()
+  const { club, refresh: refreshClub } = useClub()
   const [squad, setSquad] = useState<EnrichedPlayer[]>([])
   const [openTrials, setOpenTrials] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [logoSaving, setLogoSaving] = useState(false)
+  const logoInputRef = useRef<HTMLInputElement>(null)
 
   const clubId = club?.id
+  // Only the club's owner account can write to its storage folder (see
+  // migration 0025) — matches the existing rule that only the owner can
+  // update the club row at all, so staff accounts don't see a button that
+  // would just fail.
+  const canEditLogo = Boolean(user && club && user.id === club.owner_id)
+
+  async function handleLogoChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+
+    if (!file || !clubId) return
+
+    setLogoSaving(true)
+
+    try {
+      await uploadClubLogo(clubId, file)
+      await refreshClub()
+
+      toast({
+        tone: 'success',
+        title: 'Club logo updated',
+        description: 'Your crest now appears on your dashboard, public club page and club search.',
+      })
+    } catch (err) {
+      toast({
+        tone: 'error',
+        title: 'Could not upload club logo',
+        description: err instanceof Error ? err.message : 'Please try again.',
+      })
+    } finally {
+      setLogoSaving(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -78,6 +116,8 @@ export default function ClubDashboard() {
   return (
     <div>
       <PageHeader breadcrumb="Club workspace" title={club.name}
+        avatarName={club.name}
+        avatarUrl={club.logo_url ?? undefined}
         subtitle={`${club.league_code?.toUpperCase() ?? 'Club'} · ${club.city ?? ''}${club.city && club.state_region ? ', ' : ''}${club.state_region ?? ''}`}
         actions={
           <>
@@ -88,6 +128,53 @@ export default function ClubDashboard() {
             <Link to="/club/discovery"><Button icon="search">Find players</Button></Link>
           </>
         } />
+
+      <Card className="mb-4 p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <Avatar
+            name={club.name}
+            src={club.logo_url ?? undefined}
+            size={64}
+            ring="ring-2 ring-ink-100"
+          />
+
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-ink-900">Club logo</p>
+            <p className="mt-1 text-xs leading-relaxed text-ink-500">
+              Your crest appears on your dashboard, your public club page and
+              wherever clubs are shown in the open FutWeb directory — visible
+              to anyone browsing, signed in or not.
+            </p>
+            {canEditLogo && (
+              <p className="mt-1.5 text-2xs font-medium text-ink-400">
+                JPG, PNG or WebP · up to {Math.round(CLUB_LOGO_MAX_BYTES / (1024 * 1024))} MB
+              </p>
+            )}
+          </div>
+
+          {canEditLogo && (
+            <div className="shrink-0">
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={event => void handleLogoChange(event)}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                icon="upload"
+                loading={logoSaving}
+                onClick={() => logoInputRef.current?.click()}
+              >
+                {club.logo_url ? 'Change logo' : 'Upload logo'}
+              </Button>
+            </div>
+          )}
+        </div>
+      </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Squad size" value={squad.length} icon="users" sub={`${club.player_seats_used} of plan seats used`} />
