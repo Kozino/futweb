@@ -18,7 +18,18 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
-import { json, corsHeaders } from '../_shared/cors.ts'
+
+// CORS + JSON helpers inlined so this function is fully self-contained and can
+// be deployed standalone (no relative import to ../_shared/cors.ts).
+const corsHeaders: Record<string, string> = {
+  'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-futweb-signature, x-application-name',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
+}
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+}
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -59,6 +70,13 @@ Deno.serve(async (req) => {
   })
   const flw = await flwRes.json().catch(() => ({}))
   const ok = flwRes.ok && flw?.status === 'success'
+
+  // On success, mark the local payment row refunded (so we never double-refund)
+  // by matching the Flutterwave tx id in payments.flw_id.
+  if (ok) {
+    await admin.from('payments').update({ status: 'refunded' })
+      .eq('flw_id', String(tx_id))
+  }
 
   // Audit regardless of outcome.
   await admin.from('audit_log').insert({
