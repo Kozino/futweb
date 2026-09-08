@@ -67,7 +67,12 @@ export default function Discovery() {
       } else {
         await supabase.from('shortlists').delete().eq('club_id', clubId).eq('player_id', p.id)
       }
-      setShortlist(s => { const n = new Set(s); isAdd ? n.add(p.id) : n.delete(p.id); return n })
+      setShortlist(s => {
+        const n = new Set(s)
+        if (isAdd) n.add(p.id)
+        else n.delete(p.id)
+        return n
+      })
       toast({ tone: 'success', title: isAdd ? 'Added to shortlist' : 'Removed from shortlist' })
     } catch (err) {
       toast({ tone: 'error', title: 'Could not update shortlist', description: err instanceof Error ? err.message : 'Try again.' })

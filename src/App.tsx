@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
+  Link,
   Navigate,
   Route,
   Routes,
@@ -228,6 +229,22 @@ function AppShellRoute({ children }: { children: ReactNode }) {
         />
       </Route>
     </Routes>
+  )
+}
+
+
+function NotFound() {
+  return (
+    <main className="grid min-h-screen place-items-center bg-ink-50 px-6 text-center">
+      <div className="max-w-md space-y-4">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">404</p>
+        <h1 className="font-display text-4xl font-bold text-ink-900">Page not found</h1>
+        <p className="text-ink-600">That page does not exist or may have moved. Return to FutWeb and keep exploring.</p>
+        <Link to="/" className="inline-flex rounded-lg bg-brand-600 px-5 py-3 font-semibold text-white transition hover:bg-brand-700">
+          Back to home
+        </Link>
+      </div>
+    </main>
   )
 }
 
@@ -1464,12 +1481,7 @@ export default function App() {
 
         <Route
           path="*"
-          element={
-            <Navigate
-              to="/"
-              replace
-            />
-          }
+          element={<NotFound />}
         />
     </Routes>
       </ErrorBoundary>
