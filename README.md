@@ -64,7 +64,7 @@ supabase functions deploy flutterwave-webhook --no-verify-jwt
 | Secret Hash | identical to `FLW_SECRET_HASH` |
 | Events | `charge.completed` |
 
-The webhook verifies an **HMAC-SHA512** signature over the raw request body and
+The webhook verifies an **HMAC-SHA256** signature over the raw request body and
 compares it in constant time. Unsigned requests are rejected with `401` and
 logged to the audit trail.
 
@@ -184,7 +184,7 @@ Full reasoning in [`docs/COMPETITIVE_ANALYSIS.md`](docs/COMPETITIVE_ANALYSIS.md)
 
 ## Status
 
-Frontend complete and verified: **35 routes**, TypeScript strict-mode clean,
+Frontend complete and verified: **50+ routes**, TypeScript strict-mode clean,
 production build passing. Backend schema, RLS, triggers and both edge functions
 written; migrations have not yet been run against a live Supabase project.
 

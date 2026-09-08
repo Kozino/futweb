@@ -14,7 +14,7 @@ around the assumption that the client is fully compromised.
 |---|---|---|
 | T1 | Stolen JWT used to read another tenant's data | RLS on all 22 tables; ownership equality checks |
 | T2 | Client tampers with plan/price at checkout | Prices resolved server-side from `plans`; amount re-verified in `activate_subscription` |
-| T3 | Forged "payment successful" webhook | HMAC-SHA512 over raw body, constant-time compare |
+| T3 | Forged "payment successful" webhook | HMAC-SHA256 over raw body, constant-time compare |
 | T4 | Webhook replay double-activates a subscription | Idempotent on `tx_ref`; DB rejects illegal state transitions |
 | T5 | User escalates own role to admin | RLS `with check` pins `role`, `verification_tier`, `sub_status` to current values |
 | T6 | Minor exposed to unverified club | `can_view_player()` + `players_guard_minor()` trigger; visibility forced to `verified_only` |
@@ -91,7 +91,7 @@ and even then is only reachable by verified accounts with an active subscription
 ### Webhook
 
 ```ts
-const sig = HMAC-SHA512(SECRET_HASH, rawBody)
+const sig = HMAC-SHA256(SECRET_HASH, rawBody)
 if (!timingSafeEqual(sig, provided)) return 401   // logged, no detail returned
 ```
 

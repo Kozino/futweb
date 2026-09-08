@@ -9,7 +9,7 @@
 │                                                              │
 │  ┌────────────┐ ┌──────────────┐ ┌───────────────────────┐   │
 │  │  UI layer  │ │ OfflineQueue │ │  Rating engine (local)│   │
-│  │  35 routes │ │  (IndexedDB) │ │  position/age/conf    │   │
+│  │  50+ routes │ │  (IndexedDB) │ │  position/age/conf    │   │
 │  └─────┬──────┘ └──────┬───────┘ └───────────┬───────────┘   │
 └────────┼───────────────┼─────────────────────┼───────────────┘
          │               │                     │
@@ -26,7 +26,7 @@
 ┌─────────────────────────────────┐
 │  Flutterwave                    │
 │  charge.completed → webhook     │
-│  HMAC-SHA512 verified, idempotent│
+│  HMAC-SHA256 verified, idempotent│
 └─────────────────────────────────┘
 ```
 

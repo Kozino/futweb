@@ -328,7 +328,8 @@ export function computeTrustScore(input: {
 
   return {
     score, tier, label,
-    checks: checks.map(({ points, ...c }) => c),
+    // Points are used to calculate the score but are intentionally not exposed.
+    checks: checks.map(({ points: _points, ...c }) => c),
     nextStep,
   }
 }
