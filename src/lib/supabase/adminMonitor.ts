@@ -71,9 +71,27 @@ export async function getWebhookHealth(limit = 40): Promise<WebhookHealthRow[]> 
   return (data ?? []) as WebhookHealthRow[]
 }
 
+export interface AtRiskClub {
+  club_id: string
+  club_name: string
+  owner_sub_status: string
+  open_verified_trials: number
+  academy_links: number
+  active_api_keys: number
+  active_webhooks: number
+}
+
 export async function getPlatformMonitor(): Promise<PlatformMonitor> {
   const client = requireSupabase()
   const { data, error } = await client.rpc('admin_platform_monitor')
   if (error) throw error
   return (data?.[0] ?? {}) as PlatformMonitor
 }
+
+export async function getAtRiskClubs(): Promise<AtRiskClub[]> {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('admin_at_risk_clubs')
+  if (error) throw error
+  return (data ?? []) as AtRiskClub[]
+}
+
