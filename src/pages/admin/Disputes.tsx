@@ -10,6 +10,7 @@ interface Dispute {
   kind: string; severity: 'low' | 'medium' | 'high' | 'critical'
   status: 'open' | 'in_review' | 'escalated' | 'upheld' | 'dismissed' | 'resolved'
   summary: string; escalated_to_nff: boolean; created_at: string
+  metadata?: { who?: string | null; contact?: string | null; amount_ngn?: number | null }
   reporterName?: string; accusedName?: string
 }
 
@@ -136,6 +137,16 @@ export default function Disputes() {
               ))}
             </div>
             <p className="text-sm leading-relaxed text-ink-700">{selected.summary}</p>
+            {selected.metadata && (selected.metadata.who || selected.metadata.contact || selected.metadata.amount_ngn) && (
+              <div className="rounded-xl border border-ink-100 bg-ink-50/60 p-3.5">
+                <p className="text-2xs font-bold uppercase tracking-wider text-ink-400">Report details</p>
+                <div className="mt-2 grid gap-1.5 text-sm text-ink-700 sm:grid-cols-3">
+                  {selected.metadata.who && <div><p className="text-2xs text-ink-400">Who approached</p>{selected.metadata.who}</div>}
+                  {selected.metadata.contact && <div><p className="text-2xs text-ink-400">Contact</p><span className="break-all">{selected.metadata.contact}</span></div>}
+                  {selected.metadata.amount_ngn != null && <div><p className="text-2xs text-ink-400">Amount (₦)</p>{selected.metadata.amount_ngn.toLocaleString()}</div>}
+                </div>
+              </div>
+            )}
             <Textarea label="Resolution notes" value={resolution} onChange={e => setResolution(e.target.value)}
               placeholder="What the audit trail shows, what you decided and why." />
           </div>
