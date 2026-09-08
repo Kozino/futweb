@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge, Button, Card, Modal, Select, Skeleton, Stat, Textarea, Toggle, toast } from '@/components/ui'
-import { supabase } from '@/lib/supabase'
+import { supabase, hasSupabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { PLANS } from '@/lib/constants'
-import { formatNGN, relativeTime } from '@/lib/utils'
+import { formatNGN, formatDate, relativeTime } from '@/lib/utils'
 
 interface SubRow {
   id: string; subscriber: string; plan_code: string
@@ -29,7 +29,12 @@ const STATUS_OPTIONS = [
   { value: 'expired', label: 'Expired' },
 ]
 
-type Action = 'status' | 'plan' | 'extend' | 'cancel_sched'
+interface PaymentRefundRow {
+  id: string; flw_id: string | null; tx_ref: string; amount: number; currency: string
+  status: string; settled_at: string | null
+}
+
+type Action = 'status' | 'plan' | 'extend' | 'cancel_sched' | 'refund'
 
 export default function Subscriptions() {
   const { user } = useAuth()
@@ -45,6 +50,10 @@ export default function Subscriptions() {
   const [extendKind, setExtendKind] = useState<'grace' | 'trial'>('grace')
   const [extendDays, setExtendDays] = useState('7')
   const [cancelSched, setCancelSched] = useState(false)
+  // refund
+  const [payments, setPayments] = useState<PaymentRefundRow[]>([])
+  const [payLoading, setPayLoading] = useState(false)
+  const [refundPaymentId, setRefundPaymentId] = useState('')
 
   async function load() {
     if (!supabase) { setLoading(false); return }
@@ -80,6 +89,20 @@ export default function Subscriptions() {
     .filter(s => s.status === 'active' || s.status === 'trialing')
     .reduce((sum, s) => sum + (s.priceNgn ?? 0), 0), [subs])
 
+  async function loadPayments(subscriber: string) {
+    if (!supabase) return
+    setPayLoading(true)
+    const { data, error } = await supabase.from('payments')
+      .select('id, flw_id, tx_ref, amount, currency, status, settled_at')
+      .eq('subscriber', subscriber)
+      .order('settled_at', { ascending: false })
+    setPayLoading(false)
+    if (error) { toast({ tone: 'error', title: 'Could not load payments', description: error.message }); return }
+    setPayments((data ?? []) as PaymentRefundRow[])
+    const firstRefundable = (data ?? []).find(p => p.status === 'successful' && p.flw_id)
+    setRefundPaymentId(firstRefundable?.id ?? '')
+  }
+
   function openManage(s: SubRow) {
     setSelected(s)
     setAction('status')
@@ -88,6 +111,8 @@ export default function Subscriptions() {
     setExtendKind('grace'); setExtendDays('7')
     setCancelSched(s.status === 'cancelled')
     setReason('')
+    setPayments([]); setRefundPaymentId('')
+    void loadPayments(s.subscriber)
   }
 
   async function runAction() {
@@ -115,6 +140,37 @@ export default function Subscriptions() {
     } else {
       rpc = 'admin_cancel_at_period_end'; params = { p_subscriber: subscriber, p_cancel: cancelSched }
     }
+    if (action === 'refund') {
+      const pay = payments.find(p => p.id === refundPaymentId)
+      if (!pay) {
+        setBusy(false)
+        toast({ tone: 'error', title: 'Select a successful payment to refund' })
+        return
+      }
+      if (!hasSupabase || !supabase) {
+        setBusy(false)
+        toast({ tone: 'info', title: 'Refund not available in demo', description: 'Wire a Supabase project to process live refunds.' })
+        return
+      }
+      const { data, error } = await supabase.functions.invoke('flutterwave-refund', {
+        body: { tx_id: pay.flw_id, subscriber: subscriber, reason: reason || null },
+      })
+      setBusy(false)
+      if (error) {
+        toast({ tone: 'error', title: 'Refund failed', description: error.message })
+        return
+      }
+      const res = data as { ok?: boolean; error?: string }
+      if (!res?.ok) {
+        toast({ tone: 'error', title: 'Refund declined', description: res?.error ?? 'Refund did not succeed.' })
+        return
+      }
+      toast({ tone: 'success', title: 'Refund processed', description: 'The payment is marked refunded.' })
+      setSelected(null)
+      void load()
+      return
+    }
+
     const { error } = await client.rpc(rpc, params)
     setBusy(false)
     if (error) {
@@ -193,6 +249,7 @@ export default function Subscriptions() {
                 {([
                   ['status', 'Change status'], ['plan', 'Change plan'],
                   ['extend', 'Extend grace/trial'], ['cancel_sched', 'Cancel at period end'],
+                  ['refund', 'Refund'],
                 ] as [Action, string][]).map(([a, l]) => (
                   <button key={a} type="button"
                     onClick={() => setAction(a)}
@@ -221,6 +278,40 @@ export default function Subscriptions() {
             {action === 'cancel_sched' && (
               <Toggle checked={cancelSched} onChange={setCancelSched} label="Cancel at period end"
                 description="Retains access until the current period ends, then the status is set to cancelled." />
+            )}
+            {action === 'refund' && (
+              <div className="space-y-3">
+                {payLoading ? (
+                  <Skeleton className="h-24 w-full" />
+                ) : payments.length === 0 ? (
+                  <p className="rounded-xl bg-ink-50 p-3 text-sm text-ink-600">No payments found for this account.</p>
+                ) : (
+                  <>
+                    <p className="text-xs text-ink-500">Refund a successful charge. Only payments Flutterwave can still refund are shown.</p>
+                    <div className="space-y-2">
+                      {payments.filter(p => p.status === 'successful' && p.flw_id).map(p => (
+                        <button key={p.id} type="button" onClick={() => setRefundPaymentId(p.id)}
+                          className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left ${refundPaymentId === p.id ? 'border-red-400 bg-red-50' : 'border-ink-200 bg-white hover:bg-ink-50'}`}>
+                          <div>
+                            <p className="text-sm font-bold text-ink-900">{formatNGN(p.amount)} {p.currency}</p>
+                            <p className="text-xs text-ink-500">{formatDate(p.settled_at ?? p.tx_ref)} · {p.tx_ref}</p>
+                          </div>
+                          <Badge tone="neutral" size="sm">tx {p.flw_id}</Badge>
+                        </button>
+                      ))}
+                      {payments.filter(p => p.status === 'successful' && p.flw_id).length === 0 && (
+                        <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">No refundable successful payment (each needs a Flutterwave transaction id).</p>
+                      )}
+                    </div>
+                    <Textarea label="Reason (recorded in audit log)" value={reason} onChange={e => setReason(e.target.value)} rows={2}
+                      placeholder="Optional note for the audit trail" />
+                    <p className="rounded-xl bg-red-50 p-3 text-xs text-red-700">
+                      Refunds move real money via Flutterwave. Requires the <b>flutterwave-refund</b> function to be
+                      deployed with <b>FLW_SECRET_KEY</b>. This is the only action that cannot run in the demo.
+                    </p>
+                  </>
+                )}
+              </div>
             )}
             {(action === 'status' || action === 'extend') && (
               <Textarea label="Reason (recorded in audit log)" value={reason} onChange={e => setReason(e.target.value)} rows={2}
