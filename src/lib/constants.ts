@@ -43,7 +43,7 @@ export const PLANS: Plan[] = [
       'Career development timeline & projection',
       'Priority placement in club discovery',
       'Verified badge eligibility (ID + liveness)',
-      'Direct club messaging, guardian-copied if under 18',
+      'Direct club messaging (consent-gated, guardian-notified if under 18)',
       'PDF scouting dossier export',
     ],
   },
