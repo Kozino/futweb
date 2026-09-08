@@ -95,7 +95,8 @@ export default function ForPlayers() {
             <Card className="p-5">
               <h3 className="text-sm font-bold">Under 18?</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-ink-600">
-                Your guardian registers consent and is copied on every club message. No trial or
+                Your guardian registers consent before any club can message you, and receives a
+                copy of every club message for review. No trial or
                 transfer arrangement can be made with you directly — that is FIFA Article 19, and
                 we enforce it in code.
               </p>

@@ -8,7 +8,7 @@ const PILLARS: { icon: IconName; title: string; body: string }[] = [
   { icon: 'building', title: 'Entity verification', body: 'Clubs submit a CAC registration number and an NFF or state FA affiliation. We confirm the entity exists and that the person registering is authorised to act for it.' },
   { icon: 'user', title: 'Identity verification', body: 'Account holders verify against NIN, BVN or passport. A short liveness check defeats the impersonation that makes fake-agent scams work.' },
   { icon: 'shield', title: 'Zero-fee trial policy', body: 'A club may never charge a player to attend a trial. Postings that demand payment are blocked before they go live, and the attempt is logged against the account.' },
-  { icon: 'eye', title: 'Guardian visibility for minors', body: 'Every message a club sends to an under-18 player is copied to the registered guardian. Direct trial or transfer arrangements with minors are blocked.' },
+  { icon: 'eye', title: 'Guardian visibility for minors', body: 'A club cannot message an under-18 player until a registered guardian gives verified consent. Every club message to a minor is then consent-gated and a copy is delivered to the guardian for review. Direct trial or transfer arrangements with minors are blocked.' },
   { icon: 'doc', title: 'Immutable audit trail', body: 'Every material action — verification decisions, rating submissions, access grants — is appended to a tamper-evident log. Updates and deletes are rejected at the database level.' },
   { icon: 'alert', title: 'Report and escalate', body: 'Players can report a suspicious approach in two taps. Reports route to a human reviewer and, where warranted, to the NFF and the EFCC.' },
 ]

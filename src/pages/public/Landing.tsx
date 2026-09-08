@@ -81,7 +81,7 @@ const FAQS = [
   { q: 'Do players ever pay to attend a trial?', a: 'Never. It is a hard product rule, not a guideline: a trial posting on FutWeb may not charge players. Postings that attempt it are blocked and logged, and the club\'s trust score takes the hit.' },
   { q: 'How is the FutWeb Score different from other ratings?', a: 'Three adjustments the incumbents do not make. It is weighted for the position the player actually plays, adjusted for where they sit on the age-development curve, and discounted by how much independent evidence backs it.' },
   { q: 'What happens if I lose network while scouting?', a: 'Nothing is lost. Ratings and reports are written to your device and queued, then synced automatically when you reconnect. You will see a banner telling you exactly how many records are pending.' },
-  { q: 'How do you protect under-18 players?', a: 'Minors require a registered guardian with verified consent. Every club message to a minor is copied to the guardian, and direct trial or transfer arrangements with minors are blocked, in line with FIFA Article 19 and the Nigeria Data Protection Act 2023.' },
+  { q: 'How do you protect under-18 players?', a: 'A minor cannot be messaged by a club until a registered guardian has given verified consent. Every club message to a minor is then consent-gated and a copy is captured and delivered to the guardian for review via our guardian-notice service, and direct trial or transfer arrangements with minors are blocked — in line with FIFA Article 19 and the Nigeria Data Protection Act 2023.' },
   { q: 'Can I export my data?', a: 'Yes. Players can export their full record as a PDF dossier or a machine-readable file at any time, and request erasure under NDPA 2023.' },
 ]
 
@@ -89,7 +89,12 @@ const FAQS = [
 export default function Landing() {
   const { demoLogin } = useAuth()
   const navigate = useNavigate()
-  const featured = PLANS.filter(p => p.price_ngn > 0 && p.featured).slice(0, 2)
+  // Curate the teaser to show the ladder across both audiences: Elite (player
+  // top), Academy + Pro Club (club growth path), and Federation as the flagship.
+  const teaserOrder = ['player_elite', 'club_academy', 'club_pro', 'club_enterprise']
+  const featured = teaserOrder
+    .map(code => PLANS.find(p => p.code === code))
+    .filter((p): p is (typeof PLANS)[number] => Boolean(p))
   const spotlight = enrichPlayer(DEMO_PLAYERS[0])
 
   const trustDemo = computeTrustScore({
@@ -358,31 +363,42 @@ export default function Landing() {
           </div>
 
           <div className="mt-8 grid gap-4 md:grid-cols-2">
-            {featured.map(p => (
-              <Card key={p.id} className="flex flex-col p-6" hover>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold">{p.name}</h3>
-                    <p className="text-xs text-ink-500">{p.audience === 'club' ? 'For clubs & academies' : 'For individual players'}</p>
+            {featured.map(p => {
+              const isFederation = p.code === 'club_enterprise'
+              const isProClub = p.code === 'club_pro'
+              return (
+                <Card key={p.id} className={`flex flex-col p-6 ${isFederation ? 'border-2 border-red-500/60' : ''}`} hover>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold">{p.name}</h3>
+                      <p className="text-xs text-ink-500">{p.audience === 'club' ? 'For clubs & academies' : 'For individual players'}</p>
+                    </div>
+                    {isFederation
+                      ? <Badge tone="red">Flagship</Badge>
+                      : isProClub ? <Badge tone="red">Popular</Badge>
+                        : <Badge tone="neutral">{p.audience === 'club' ? 'Entry' : 'Player'}</Badge>}
                   </div>
-                  <Badge tone="red">Popular</Badge>
-                </div>
-                <div className="mt-4 flex items-baseline gap-1.5">
-                  <span className="font-display text-4xl">{formatNGN(p.price_ngn)}</span>
-                  <span className="text-sm text-ink-500">/month</span>
-                </div>
-                <ul className="mt-5 flex-1 space-y-2">
-                  {p.features.slice(0, 5).map(f => (
-                    <li key={f} className="flex items-start gap-2 text-sm text-ink-700">
-                      <Icon name="check" size={14} className="mt-0.5 shrink-0 text-trust-500" />{f}
-                    </li>
-                  ))}
-                </ul>
-                <Link to="/register" className="mt-6 block">
-                  <Button fullWidth iconRight="arrow-right">Start 14-day trial</Button>
-                </Link>
-              </Card>
-            ))}
+                  <div className="mt-4 flex items-baseline gap-1.5">
+                    <span className="font-display text-4xl">{formatNGN(p.price_ngn)}</span>
+                    <span className="text-sm text-ink-500">/month</span>
+                  </div>
+                  <ul className="mt-5 flex-1 space-y-2">
+                    {p.features.map(f => (
+                      <li key={f} className="flex items-start gap-2 text-sm text-ink-700">
+                        <Icon name={f.startsWith('Add-on') ? 'plus' : 'check'} size={14}
+                          className={`mt-0.5 shrink-0 ${f.startsWith('Add-on') ? 'text-ink-400' : 'text-trust-500'}`} />
+                        <span className={f.startsWith('Add-on') ? 'text-ink-500' : ''}>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to={isFederation ? '/federation/apply' : '/register'} className="mt-6 block">
+                    <Button fullWidth iconRight={isFederation ? 'arrow-right' : 'arrow-right'}>
+                      {isFederation ? 'Request Federation access' : 'Start 14-day trial'}
+                    </Button>
+                  </Link>
+                </Card>
+              )
+            })}
           </div>
         </div>
       </section>
