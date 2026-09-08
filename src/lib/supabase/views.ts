@@ -30,5 +30,12 @@ export async function getMyProfileViews(limit = 25): Promise<ProfileView[]> {
   const client = requireSupabase()
   const { data, error } = await client.rpc('my_profile_views', { p_limit: limit })
   if (error) throw error
-  return (data as ProfileView[] | null) ?? []
+
+  type Row = { viewer_name: string; viewer_club: string | null; viewed_at: string }
+
+  return ((data as Row[] | null) ?? []).map(row => ({
+    viewerName: row.viewer_name,
+    viewerClub: row.viewer_club,
+    viewedAt: row.viewed_at,
+  }))
 }
