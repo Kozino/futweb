@@ -136,3 +136,53 @@ as $$
     (select count(*) from public.enterprise_requests er where er.status = 'new')     as enterprise_new
   where public.is_admin()
 $$;
+
+-- ---------------------------------------------------------------------------
+-- At-risk clubs: an owner's subscription has lapsed (no longer active/trial/
+-- grace) yet the club still holds premium artefacts that SHOULD have been
+-- withdrawn — open verified trials, live academy links, active API keys or
+-- active webhook endpoints. Surfaces the downgrade/lapse withdrawal risk the
+-- platform otherwise can't see until the UI re-gates. Read-only, admin-only.
+-- ---------------------------------------------------------------------------
+create or replace function public.admin_at_risk_clubs()
+returns table (
+  club_id            uuid,
+  club_name          text,
+  owner_sub_status   text,
+  open_verified_trials bigint,
+  academy_links      bigint,
+  active_api_keys    bigint,
+  active_webhooks    bigint
+)
+language sql stable security definer
+set search_path = public, pg_temp
+as $$
+  select
+    c.id,
+    c.name,
+    o.sub_status                                    as owner_sub_status,
+    (select count(*) from public.trial_postings t
+      where t.club_id = c.id and t.status = 'open' and t.verified)::bigint
+                                                    as open_verified_trials,
+    (select count(*) from public.clubs cc
+      where cc.parent_club_id = c.id)::bigint       as academy_links,
+    (select count(*) from public.api_keys k
+      where k.club_id = c.id and k.revoked_at is null)::bigint
+                                                    as active_api_keys,
+    (select count(*) from public.webhook_endpoints we
+      where we.club_id = c.id and we.active)::bigint as active_webhooks
+  from public.clubs c
+  join public.profiles o on o.id = c.owner_id
+  where public.is_admin()
+    and o.sub_status not in ('active','trialing','grace')
+    and (
+      exists (select 1 from public.trial_postings t
+               where t.club_id = c.id and t.status = 'open' and t.verified)
+      or exists (select 1 from public.clubs cc where cc.parent_club_id = c.id)
+      or exists (select 1 from public.api_keys k
+                  where k.club_id = c.id and k.revoked_at is null)
+      or exists (select 1 from public.webhook_endpoints we
+                  where we.club_id = c.id and we.active)
+    )
+  order by o.sub_status, c.name
+$$;
