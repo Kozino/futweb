@@ -48,6 +48,7 @@ Open the Supabase SQL editor (or `psql`) and run:
 11. **`supabase/migrations/0018_admin_monitor.sql`** — admin monitoring for Federation & developer access (NEW). Admin-only, `security definer` reporting functions gated on `is_admin()`, returning **sanitised** rows (API-key prefix only, never the secret/hash): `admin_federation_tree`, `admin_api_keys_view`, `admin_webhook_health`, `admin_platform_monitor`, and `admin_at_risk_clubs` (clubs whose subscription lapsed but that still hold open verified trials / academy links / active API keys / webhooks — the downgrade-withdrawal risk watch). Drives the new **Admin → Federation & API** page (`/admin/federation-api`), including an at-risk banner.
 12. **`supabase/migrations/0019_guardian_copy.sql`** — guardian-copy pipeline for club→minor messaging (NEW). Adds a durable `guardian_copies` outbox and rewrites `send_message` so EVERY message involving a minor is captured as a copy addressed to the registered guardian (name/email from the player record) — consent-gating remains enforced and messaging a minor without guardian consent is still blocked. Adds `my_guardian_copies` (player/guardian view) and `admin_guardian_copies_health`. Delivery runs via **`supabase/functions/guardian-copy-deliver`** (deploy + schedule it; needs a verified sender email). Landing/Trust/ForPlayers/pricing copy now reflects what's enforced (consent-gated + guardian-notified) rather than implying an always-on email.
 13. **`supabase/migrations/0020_report_to_disputes.sql`** — wire the "Report a suspicious approach" flow into the real queue (NEW). The `/report` page (previously cosmetic — it showed a fake confirmation and wrote nothing) is now gated to **authenticated players** and inserts a row into the `disputes` table (matching `kind`/`severity`, prose `summary`, plus a new `metadata` jsonb holding who/contact/amount). Reports therefore appear under **Admin → Disputes & reports** with the reporter attributed, and the review modal shows the structured report details. Reference shown to the reporter is derived from the real row id.
+14. **`supabase/migrations/0021_admin_subscription_actions.sql`** — make the Admin → Subscriptions **Manage** button functional (NEW). Adds admin-gated security-definer RPCs (`admin_change_plan`, `admin_set_subscription_status`, `admin_extend_period`, `admin_cancel_at_period_end`) that update BOTH `subscriptions` and `profiles.sub_status`/`plan_code` in sync (profiles is the authoritative access state), so changing a status genuinely withdraws/restores paid access at the DB and is audit-logged. The Manage modal offers change-status / change-plan / extend-grace-or-trial / cancel-at-period-end. **Money actions (refund/void)** are scaffolded via **`supabase/functions/flutterwave-refund`** and only run once deployed with `FLW_SECRET_KEY`.
 
 All are idempotent and safe to re-run.
 
@@ -202,6 +203,20 @@ edge functions. Ensure:
 3. In the Flutterwave dashboard set Webhook URL to
    `https://<ref>.supabase.co/functions/v1/flutterwave-webhook`, Secret Hash =
    `FLW_SECRET_HASH`, events = `charge.completed`.
+
+**Admin refunds (money action):** the Manage modal now has a **Refund** action
+that looks up the account's successful payments (from `payments`, matching the
+subscription's `subscriber`) and shows each refundable charge (with its
+Flutterwave `flw_id`, amount + date). Selecting one and Apply calls
+**`supabase/functions/flutterwave-refund`** (JWT ON, re-checks admin; proxies to
+Flutterwave `/v3/transactions/:id/refund`). On success it also marks the local
+`payments` row `status = 'refunded'` (so it can't be double-refunded) and audit-
+logs. To make refunds live:
+1. `supabase secrets set FLW_SECRET_KEY ...`
+2. `supabase functions deploy flutterwave-refund` (it is now self-contained, no
+   `_shared` import)
+The DB-level actions (status / plan / grace-trial / cancel-at-period-end) work
+immediately after migration 0021 regardless.
 
 The "Manage" button on Admin → Subscriptions is intentionally a stub — wire it
 to `flutterwave` endpoints (refund/pause/change) when you have a live account.
