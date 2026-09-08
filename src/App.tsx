@@ -937,7 +937,13 @@ export default function App() {
 
           <Route
             path="/report"
-            element={<Report />}
+            element={
+              <RequireAuth>
+                <RequireRole role="player">
+                  <Report />
+                </RequireRole>
+              </RequireAuth>
+            }
           />
 
           <Route
