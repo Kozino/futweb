@@ -32,6 +32,7 @@ import Report from '@/pages/public/Report'
 import TalentDirectory from '@/pages/public/TalentDirectory'
 import PlayerPublicProfile from '@/pages/public/PlayerPublicProfile'
 import ClubPublicProfile from '@/pages/public/ClubPublicProfile'
+import FixItSplash from '@/pages/public/FixItSplash'
 
 /* Auth */
 import Login from '@/pages/auth/Login'
@@ -1474,6 +1475,18 @@ export default function App() {
               <FederationApply />
             </RequireAuth>
           }
+        />
+
+
+        {/* Fix It Splash Song - Storyboard Video */}
+        <Route
+          path="/fix-it-splash"
+          element={<FixItSplash />}
+        />
+
+        <Route
+          path="/storyboard"
+          element={<FixItSplash />}
         />
 
 
