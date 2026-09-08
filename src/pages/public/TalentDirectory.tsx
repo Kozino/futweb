@@ -158,7 +158,15 @@ export default function TalentDirectory() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {clubResults.map(c => (
                 <Card key={c.id} hover className="p-5">
-                  <div className="flex items-start justify-between gap-3"><div className="grid h-12 w-12 place-items-center rounded-xl bg-ink-900 text-xs font-extrabold text-white">{c.short_name}</div><Badge tone="trust" icon="shield" size="sm">Verified</Badge></div>
+                  <div className="flex items-start justify-between gap-3">
+                    {c.logo_url ? (
+                      <img src={c.logo_url} alt={`${c.name} logo`}
+                        className="h-12 w-12 shrink-0 rounded-xl object-cover ring-1 ring-ink-100" />
+                    ) : (
+                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-ink-900 text-xs font-extrabold text-white">{c.short_name}</div>
+                    )}
+                    <Badge tone="trust" icon="shield" size="sm">Verified</Badge>
+                  </div>
                   <Link to={`/clubs/${c.slug}`} className="mt-4 block text-base font-extrabold hover:text-red-600">{c.name}</Link>
                   <p className="mt-1 text-xs text-ink-500">{c.city ?? clubState(c) ?? c.country} · {LEAGUES.find(l => l.value === clubLeague(c))?.label ?? clubLeague(c) ?? 'Football club'}</p>
                   <div className="mt-4 grid grid-cols-2 gap-2"><div className="rounded-xl bg-ink-50 p-3"><p className="text-2xs uppercase tracking-wider text-ink-400">Verified</p><p className="font-display text-xl text-trust-600">Yes</p></div><div className="rounded-xl bg-ink-50 p-3"><p className="text-2xs uppercase tracking-wider text-ink-400">Founded</p><p className="font-display text-xl">{c.founded_year ?? '—'}</p></div></div>
