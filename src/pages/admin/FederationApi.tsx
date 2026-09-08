@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Button, Card, EmptyState, Skeleton, Stat, Tabs, toast } from '@/components/ui'
+import { Badge, Button, Card, EmptyState, Icon, Skeleton, Stat, Tabs, toast } from '@/components/ui'
 import {
-  getFederationTree, getAdminApiKeys, getWebhookHealth, getPlatformMonitor,
-  type FederationTreeRow, type ApiKeyAdminRow, type WebhookHealthRow, type PlatformMonitor,
+  getFederationTree, getAdminApiKeys, getWebhookHealth, getPlatformMonitor, getAtRiskClubs,
+  type FederationTreeRow, type ApiKeyAdminRow, type WebhookHealthRow, type PlatformMonitor, type AtRiskClub,
 } from '@/lib/supabase/adminMonitor'
 import { hasSupabase } from '@/lib/supabase'
 
@@ -17,18 +17,20 @@ export default function FederationApi() {
   const [tree, setTree] = useState<FederationTreeRow[]>([])
   const [keys, setKeys] = useState<ApiKeyAdminRow[]>([])
   const [webhooks, setWebhooks] = useState<WebhookHealthRow[]>([])
+  const [atRisk, setAtRisk] = useState<AtRiskClub[]>([])
 
   async function load() {
     if (!hasSupabase) { setLoading(false); return }
     setLoading(true)
     try {
-      const [m, t, k, w] = await Promise.all([
+      const [m, t, k, w, a] = await Promise.all([
         getPlatformMonitor().catch(() => null),
         getFederationTree().catch(() => [] as FederationTreeRow[]),
         getAdminApiKeys().catch(() => [] as ApiKeyAdminRow[]),
         getWebhookHealth(40).catch(() => [] as WebhookHealthRow[]),
+        getAtRiskClubs().catch(() => [] as AtRiskClub[]),
       ])
-      setMon(m); setTree(t); setKeys(k); setWebhooks(w)
+      setMon(m); setTree(t); setKeys(k); setWebhooks(w); setAtRisk(a)
     } catch (err) {
       toast({ tone: 'error', title: 'Could not load monitor', description: err instanceof Error ? err.message : 'Run migration 0018.' })
     } finally { setLoading(false) }
@@ -59,6 +61,52 @@ export default function FederationApi() {
         <Stat label="Enterprise requests (new)" value={mon?.enterprise_new ?? '—'}
           sub="awaiting triage" icon="bell" tone="gold" />
       </div>
+
+      {/* At-risk clubs banner */}
+      {atRisk.length > 0 && (
+        <Card className="mt-5 border-red-200 bg-red-50/40">
+          <div className="flex items-start gap-3 p-4">
+            <div className="mt-0.5 text-red-500"><Icon name="alert" size={18} /></div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-red-700">At-risk clubs ({atRisk.length})</h3>
+                <Badge tone="red" size="sm">lapsed subscription</Badge>
+              </div>
+              <p className="mt-1 text-xs text-red-600/90">
+                These clubs' subscriptions have lapsed but they still hold premium artefacts that should have been
+                withdrawn. Review whether the downgrade/cancellation propagated (migration 0017 withdraws access at
+                the DB for Federation reads; open verified trials &amp; links remain a policy decision).
+              </p>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[640px] text-xs">
+                  <thead>
+                    <tr className="text-left text-red-400">
+                      <th className="pb-1 pr-4 font-semibold">Club</th>
+                      <th className="pb-1 pr-4 font-semibold">Sub status</th>
+                      <th className="pb-1 pr-4 font-semibold">Open trials</th>
+                      <th className="pb-1 pr-4 font-semibold">Academy links</th>
+                      <th className="pb-1 pr-4 font-semibold">API keys</th>
+                      <th className="pb-1 font-semibold">Webhooks</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-red-800">
+                    {atRisk.map(a => (
+                      <tr key={a.club_id} className="border-t border-red-100">
+                        <td className="py-1.5 pr-4 font-semibold">{a.club_name}</td>
+                        <td className="py-1.5 pr-4"><Badge tone="red" size="sm">{a.owner_sub_status}</Badge></td>
+                        <td className="py-1.5 pr-4">{a.open_verified_trials}</td>
+                        <td className="py-1.5 pr-4">{a.academy_links}</td>
+                        <td className="py-1.5 pr-4">{a.active_api_keys}</td>
+                        <td className="py-1.5">{a.active_webhooks}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <div className="mt-5">
         <Tabs value={tab} onChange={setTab} tabs={[
