@@ -224,7 +224,7 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
       <div className="relative">
         <button onClick={() => setOpen(o => !o)}
           className="flex items-center gap-2 rounded-xl p-1 pr-2 hover:bg-ink-100">
-          <Avatar name={user?.fullName ?? '?'} size={30} />
+          <Avatar name={user?.fullName ?? '?'} src={user?.avatarUrl} size={30} />
           <Icon name="chevron-down" size={14} className="text-ink-400" />
         </button>
         {open && (

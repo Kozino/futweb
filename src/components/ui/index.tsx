@@ -334,6 +334,11 @@ export function Tabs<T extends string>({ tabs, value, onChange, className }:
 
 export function Avatar({ name, src, size = 40, ring }: { name: string; src?: string; size?: number; ring?: string }) {
   const [failed, setFailed] = useState(false)
+
+  // A replacement headshot should be attempted again after an earlier URL
+  // failed (for example, when a player uploads a new CV photo).
+  useEffect(() => setFailed(false), [src])
+
   const letters = name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
   const hue = [...name].reduce((a, c) => a + c.charCodeAt(0), 0) % 360
   return (

@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
 import {
+  Avatar,
   Badge,
   Button,
   Card,
@@ -16,9 +18,14 @@ import {
 } from '@/components/ui'
 import { MinorProtectionNotice } from '@/components/trust'
 import { usePlayer } from '@/context/PlayerContext'
+import { useAuth } from '@/context/AuthContext'
 import { NIGERIAN_STATES } from '@/lib/utils'
 import { POSITION_LIST } from '@/lib/ratings'
 import { createCareerEntry } from '@/lib/supabase/career'
+import { PLAYER_PHOTO_MAX_BYTES, uploadPlayerCvPhoto } from '@/lib/supabase/players'
+import { hasFeature } from '@/lib/entitlements'
+import { ShareCardModal } from '@/components/player/ShareCard'
+import { buildShareCardData, latestClubName } from '@/lib/playerCard'
 
 type ProfileForm = {
   first_name: string
@@ -203,8 +210,10 @@ function AddCareerModal({
 }
 
 export default function PlayerProfile() {
+  const { user, updateUser, refreshProfile } = useAuth()
   const {
     player,
+    attributes,
     career,
     loading,
     error,
@@ -212,10 +221,13 @@ export default function PlayerProfile() {
     refresh,
   } = usePlayer()
 
+  const photoInputRef = useRef<HTMLInputElement | null>(null)
   const [tab, setTab] = useState<'edit' | 'preview'>('edit')
   const [form, setForm] = useState<ProfileForm | null>(null)
   const [saving, setSaving] = useState(false)
+  const [photoSaving, setPhotoSaving] = useState(false)
   const [careerOpen, setCareerOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
 
   useEffect(() => {
     if (player) {
@@ -233,6 +245,26 @@ export default function PlayerProfile() {
     [career],
   )
 
+  const shareData = useMemo(
+    () => player
+      ? buildShareCardData({
+          player,
+          attributes,
+          clubName: latestClubName(career),
+          verified: Boolean(user && user.verificationTier !== 'unverified'),
+        })
+      : null,
+    [attributes, career, player, user],
+  )
+
+  const shareUrl = useMemo(() => {
+    if (!player?.slug) return undefined
+    return `${window.location.origin}/players/${player.slug}`
+  }, [player?.slug])
+
+  const canShareImage = hasFeature(user, 'share_card')
+  const canExportPdf = hasFeature(user, 'pdf_dossier')
+
   const setField = <K extends keyof ProfileForm>(
     key: K,
     value: ProfileForm[K],
@@ -242,6 +274,38 @@ export default function PlayerProfile() {
         ? { ...current, [key]: value }
         : current
     ))
+  }
+
+  async function handlePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+
+    if (!file || !user || !player) return
+
+    setPhotoSaving(true)
+
+    try {
+      const updated = await uploadPlayerCvPhoto(user.id, file)
+
+      // Update the shell immediately, then refresh the RLS-protected player
+      // record so every CV surface uses the same saved URL.
+      updateUser({ avatarUrl: updated.avatar_url ?? undefined })
+      await Promise.all([refresh(), refreshProfile()])
+
+      toast({
+        tone: 'success',
+        title: 'Profile photo updated',
+        description: 'Your headshot now appears on your CV, dashboard and player views.',
+      })
+    } catch (err) {
+      toast({
+        tone: 'error',
+        title: 'Could not upload profile photo',
+        description: err instanceof Error ? err.message : 'Please try again.',
+      })
+    } finally {
+      setPhotoSaving(false)
+    }
   }
 
   const save = async () => {
@@ -411,9 +475,10 @@ export default function PlayerProfile() {
     form.weight_kg,
     form.bio,
     form.state_of_origin,
+    player.avatar_url,
   ].filter(Boolean).length
 
-  const completeness = Math.round((profileCompleteness / 9) * 100)
+  const completeness = Math.round((profileCompleteness / 10) * 100)
 
   return (
     <div>
@@ -423,13 +488,33 @@ export default function PlayerProfile() {
         title="My CV"
         subtitle="This is your live FutWeb player profile. Changes are saved to your account."
         actions={
-          <Button
-            icon="check"
-            loading={saving}
-            onClick={save}
-          >
-            {saving ? 'Saving…' : 'Save changes'}
-          </Button>
+          <>
+            {canShareImage && shareData && (
+              <Button
+                variant="outline"
+                icon="share"
+                onClick={() => setShareOpen(true)}
+              >
+                Share as image
+              </Button>
+            )}
+
+            {canExportPdf && (
+              <Link to="/player/dossier">
+                <Button variant="outline" icon="download">
+                  Save as PDF
+                </Button>
+              </Link>
+            )}
+
+            <Button
+              icon="check"
+              loading={saving}
+              onClick={save}
+            >
+              {saving ? 'Saving…' : 'Save changes'}
+            </Button>
+          </>
         }
       />
 
@@ -447,6 +532,46 @@ export default function PlayerProfile() {
           <div className="space-y-4">
             <Card className="p-5">
               <h3 className="mb-4 text-sm font-bold">Personal details</h3>
+
+              <div className="mb-5 flex flex-col gap-4 rounded-2xl border border-ink-100 bg-ink-50/60 p-4 sm:flex-row sm:items-center">
+                <Avatar
+                  name={`${form.first_name} ${form.last_name}`.trim() || 'Player'}
+                  src={player.avatar_url ?? undefined}
+                  size={88}
+                  ring="ring-2 ring-white shadow-sm"
+                />
+
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-ink-900">CV profile photo</p>
+                  <p className="mt-1 text-xs leading-relaxed text-ink-500">
+                    Use a clear headshot. It appears on your CV, dashboard and
+                    wherever your profile is visible to clubs or the public.
+                  </p>
+                  <p className="mt-1.5 text-2xs font-medium text-ink-400">
+                    JPG, PNG or WebP · up to {Math.round(PLAYER_PHOTO_MAX_BYTES / (1024 * 1024))} MB · included with an active player plan
+                  </p>
+                </div>
+
+                <div className="shrink-0">
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={event => void handlePhotoChange(event)}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    icon="upload"
+                    loading={photoSaving}
+                    onClick={() => photoInputRef.current?.click()}
+                  >
+                    {player.avatar_url ? 'Change photo' : 'Upload photo'}
+                  </Button>
+                </div>
+              </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <Input
@@ -723,6 +848,48 @@ export default function PlayerProfile() {
             </Card>
 
             <Card className="p-5">
+              <h3 className="mb-1 text-sm font-bold">Share and export CV</h3>
+              <p className="text-xs leading-relaxed text-ink-500">
+                Send a polished image card or save your full scouting dossier as a PDF.
+              </p>
+
+              <div className="mt-4 space-y-2">
+                {canShareImage && shareData ? (
+                  <Button
+                    type="button"
+                    fullWidth
+                    size="sm"
+                    variant="outline"
+                    icon="share"
+                    onClick={() => setShareOpen(true)}
+                  >
+                    Share CV as image
+                  </Button>
+                ) : (
+                  <Link to="/billing" className="block">
+                    <Button type="button" fullWidth size="sm" variant="outline" icon="lock">
+                      Image CV · Pro plan
+                    </Button>
+                  </Link>
+                )}
+
+                {canExportPdf ? (
+                  <Link to="/player/dossier" className="block">
+                    <Button type="button" fullWidth size="sm" variant="outline" icon="download">
+                      Save CV as PDF
+                    </Button>
+                  </Link>
+                ) : (
+                  <Link to="/billing" className="block">
+                    <Button type="button" fullWidth size="sm" variant="outline" icon="lock">
+                      PDF dossier · Elite plan
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            </Card>
+
+            <Card className="p-5">
               <h3 className="mb-3 text-sm font-bold">Visibility</h3>
 
               <p className="mb-3 text-xs leading-relaxed text-ink-500">
@@ -811,9 +978,12 @@ export default function PlayerProfile() {
 
             <div className="px-5 pb-5">
               <div className="-mt-10 flex items-end gap-4">
-                <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl border-4 border-white bg-red-600 font-display text-2xl text-white shadow-lg">
-                  {initials(form.first_name, form.last_name)}
-                </div>
+                <Avatar
+                  name={fullName}
+                  src={player.avatar_url ?? undefined}
+                  size={80}
+                  ring="ring-4 ring-white shadow-lg"
+                />
 
                 <div className="mb-1 min-w-0 flex-1">
                   <h2 className="truncate font-display text-2xl tracking-wide">
@@ -958,6 +1128,16 @@ export default function PlayerProfile() {
             )}
           </div>
         </div>
+      )}
+
+      {shareData && canShareImage && (
+        <ShareCardModal
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          data={shareData}
+          avatarUrl={player.avatar_url ?? undefined}
+          profileUrl={shareUrl}
+        />
       )}
     </div>
   )

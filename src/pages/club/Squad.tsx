@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Button, Card, EmptyState, Icon, Input, Modal, ProgressBar, Select, Skeleton, Tabs, toast } from '@/components/ui'
+import { Avatar, Badge, Button, Card, EmptyState, Icon, Input, Modal, ProgressBar, Select, Skeleton, Tabs, toast } from '@/components/ui'
 import { useClub } from '@/context/ClubContext'
 import { useAuth } from '@/context/AuthContext'
 import { hasSupabase, supabase } from '@/lib/supabase'
@@ -132,8 +132,13 @@ export default function Squad() {
                       </span>
                     </div>
                     <div className="px-4 pb-4">
-                      <div className="-mt-6 mb-2 grid h-12 w-12 place-items-center rounded-xl border-4 border-white bg-gradient-to-br from-red-500 to-red-700 text-sm font-bold text-white">
-                        {p.first_name[0]}{p.last_name[0]}
+                      <div className="-mt-6 mb-2">
+                        <Avatar
+                          name={`${p.first_name} ${p.last_name}`}
+                          src={p.avatar_url ?? undefined}
+                          size={48}
+                          ring="ring-4 ring-white shadow-sm"
+                        />
                       </div>
                       <p className="truncate text-sm font-bold">{p.first_name} {p.last_name}</p>
                       <p className="text-2xs text-ink-500">{p.age} yrs · {p.height_cm}cm · {p.foot} foot</p>
@@ -174,9 +179,11 @@ export default function Squad() {
                     <tr key={p.id} className="hover:bg-ink-50">
                       <td className="px-4 py-3">
                         <Link to={`/club/player/${p.id}`} className="flex items-center gap-2.5">
-                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-ink-900 text-2xs font-bold text-white">
-                            {p.first_name[0]}{p.last_name[0]}
-                          </span>
+                          <Avatar
+                            name={`${p.first_name} ${p.last_name}`}
+                            src={p.avatar_url ?? undefined}
+                            size={32}
+                          />
                           <span>
                             <span className="block font-semibold">{p.first_name} {p.last_name}</span>
                             <span className="block text-2xs text-ink-400">{p.state_of_origin ?? '—'}</span>
@@ -231,9 +238,11 @@ export default function Squad() {
             </p>
           ) : shownCandidates.map(p => (
             <div key={p.id} className="flex items-center gap-3 rounded-xl border border-ink-100 p-3">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-ink-900 text-2xs font-bold text-white">
-                {p.position_primary}
-              </span>
+              <Avatar
+                name={`${p.first_name} ${p.last_name}`}
+                src={p.avatar_url ?? undefined}
+                size={36}
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-bold">{p.first_name} {p.last_name}</p>
                 <p className="text-2xs text-ink-500">{p.age} yrs · {p.position_primary} · {p.state_of_origin ?? '—'}</p>

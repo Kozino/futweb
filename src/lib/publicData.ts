@@ -2,15 +2,15 @@ import { supabase, hasSupabase } from '@/lib/supabase'
 
 export interface PublicPlayerRow {
   // Note: exact date of birth is intentionally not exposed by the public
-  // directory view — only the derived `age`. See supabase/migrations/0005.
+  // directory view — only the derived `age`. See migration 0022.
   id: string; slug: string; first_name: string; last_name: string; age: number
-  nationality: string; state_of_origin?: string; position_primary: string; position_secondary: string[]
-  foot: 'left' | 'right' | 'both'; height_cm: number; weight_kg: number; bio?: string
+  nationality: string; state_of_origin?: string | null; position_primary: string; position_secondary: string[]
+  foot: 'left' | 'right' | 'both'; height_cm: number | null; weight_kg: number | null; bio?: string | null
   availability: 'available' | 'trial_only' | 'under_contract' | 'not_looking'
-  futweb_score?: number; potential?: number; confidence?: number; visibility: 'public' | 'verified_only' | 'private'
-  is_minor: boolean; managed_by_club_id?: string; avatar_url?: string
-  club_id?: string; club_name?: string; club_short_name?: string; club_city?: string; club_state?: string
-  club_league?: string; club_logo_url?: string; club_entity_verified?: boolean
+  futweb_score?: number | null; potential?: number | null; confidence?: number | null; visibility: 'public' | 'verified_only' | 'private'
+  is_minor: boolean; avatar_url?: string | null
+  club_id?: string | null; club_name?: string | null; club_short_name?: string | null; club_city?: string | null; club_state?: string | null
+  club_league?: string | null; club_logo_url?: string | null; club_entity_verified?: boolean | null
 }
 
 export interface PublicClubRow {
