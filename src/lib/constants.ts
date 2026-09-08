@@ -131,6 +131,7 @@ export const NAV_BY_ROLE = {
     { label: 'Trials & Offers', to: '/player/trials', icon: 'target' },
     { label: 'Messages', to: '/messages', icon: 'chat' },
     { label: 'Verification', to: '/player/verify', icon: 'shield' },
+    { label: 'Report', to: '/report', icon: 'alert' },
     { label: 'Billing', to: '/billing', icon: 'card' },
   ],
   club: [
