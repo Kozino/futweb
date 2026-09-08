@@ -115,6 +115,74 @@ export async function getMyClubMembership(
   return data as ClubMembership | null
 }
 
+/** The club-assets bucket has the same 2 MB limit; validate before transferring. */
+export const CLUB_LOGO_MAX_BYTES = 2 * 1024 * 1024
+
+const CLUB_LOGO_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+])
+
+/**
+ * Upload the crest/logo shown on a club's public profile and in club search
+ * results. The object lives under the club's own folder in the public
+ * `club-assets` bucket (see migration 0025) so it can be read by anyone —
+ * including signed-out visitors browsing /clubs — while only the club owner
+ * can write to it.
+ */
+export async function uploadClubLogo(
+  clubId: string,
+  file: File,
+): Promise<ClubRow> {
+  if (!supabase) {
+    throw new Error('Supabase is not configured.')
+  }
+
+  if (!CLUB_LOGO_TYPES.has(file.type)) {
+    throw new Error('Use a JPG, PNG or WebP image for your club logo.')
+  }
+
+  if (file.size <= 0) {
+    throw new Error('Choose an image file to upload.')
+  }
+
+  if (file.size > CLUB_LOGO_MAX_BYTES) {
+    throw new Error('Club logos must be 2 MB or smaller.')
+  }
+
+  // A stable filename keeps one current logo per club. The version query
+  // string lets browsers immediately show a replacement despite CDN cache.
+  const storagePath = `${clubId}/logo`
+
+  const { error: uploadError } = await supabase.storage
+    .from('club-assets')
+    .upload(storagePath, file, {
+      cacheControl: '31536000',
+      upsert: true,
+      contentType: file.type,
+    })
+
+  if (uploadError) throw uploadError
+
+  const { data: publicUrlData } = supabase.storage
+    .from('club-assets')
+    .getPublicUrl(storagePath)
+
+  const logoUrl = `${publicUrlData.publicUrl}?v=${Date.now()}`
+
+  const { data, error } = await supabase
+    .from('clubs')
+    .update({ logo_url: logoUrl })
+    .eq('id', clubId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+
+  return data as ClubRow
+}
+
 export async function updateMyClubProfile(
   clubId: string,
   input: {
@@ -154,4 +222,3 @@ export async function updateMyClubProfile(
 
   return data as ClubRow
 }
-
