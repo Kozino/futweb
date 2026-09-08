@@ -35,6 +35,8 @@ export interface WorkspaceMedia {
 export interface EnrichedPlayer {
   id: string
   user_id: string
+  /** CV headshot; supplied by the RLS-protected players row. */
+  avatar_url: string | null
   first_name: string
   last_name: string
   dob: string
@@ -111,6 +113,7 @@ export async function enrichPlayers(
   playerRows: Array<{
     id: string
     user_id: string
+    avatar_url?: string | null
     first_name: string
     last_name: string
     dob: string
@@ -260,6 +263,7 @@ export async function enrichPlayers(
     out.push({
       id: p.id,
       user_id: p.user_id,
+      avatar_url: p.avatar_url ?? null,
       first_name: p.first_name,
       last_name: p.last_name,
       dob: p.dob,

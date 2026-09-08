@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import { PageHeader } from '@/components/layout/PageHeader'
 import {
+  Avatar,
   Badge,
   Button,
   Card,
@@ -68,10 +69,6 @@ function getAge(dob: string) {
   return age
 }
 
-function getInitials(firstName: string, lastName: string) {
-  return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
-}
-
 function formatDate(value: string | null | undefined) {
   if (!value) return '—'
 
@@ -100,6 +97,7 @@ function calculateCompleteness(player: {
   height_cm: number | null
   weight_kg: number | null
   bio: string | null
+  avatar_url: string | null
 }) {
   const checks = [
     Boolean(player.first_name),
@@ -111,6 +109,7 @@ function calculateCompleteness(player: {
     Boolean(player.height_cm),
     Boolean(player.weight_kg),
     Boolean(player.bio),
+    Boolean(player.avatar_url),
   ]
 
   const completed = checks.filter(Boolean).length
@@ -258,8 +257,6 @@ export default function PlayerDashboard() {
   }
 
   const fullName = `${player.first_name} ${player.last_name}`.trim()
-  const initials = getInitials(player.first_name, player.last_name)
-
   const confidence = player.confidence ?? 0
   const score = player.futweb_score
   const potential = player.potential
@@ -331,9 +328,12 @@ export default function PlayerDashboard() {
       <Card className="mb-4 overflow-hidden">
         <div className="flex flex-col gap-5 p-5 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-4">
-            <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-ink-900 text-lg font-bold text-white">
-              {initials}
-            </div>
+            <Avatar
+              name={fullName}
+              src={player.avatar_url ?? undefined}
+              size={64}
+              ring="ring-2 ring-ink-100"
+            />
 
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -446,7 +446,10 @@ export default function PlayerDashboard() {
           <Card className="mb-4 overflow-hidden">
             <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center">
               <div className="w-32 shrink-0 self-center sm:self-auto">
-                <ShareCardPreview data={shareData} avatarUrl={undefined} />
+                <ShareCardPreview
+                  data={shareData}
+                  avatarUrl={player.avatar_url ?? undefined}
+                />
               </div>
               <div className="min-w-0 flex-1">
                 <h2 className="text-sm font-bold text-ink-900">Shareable CV card</h2>
@@ -929,6 +932,7 @@ export default function PlayerDashboard() {
           open={shareOpen}
           onClose={() => setShareOpen(false)}
           data={shareData}
+          avatarUrl={player.avatar_url ?? undefined}
           profileUrl={shareUrl}
         />
       )}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Button, Card, CardHeader, EmptyState, Icon, ProgressBar, Skeleton, Stat } from '@/components/ui'
+import { Avatar, Badge, Button, Card, CardHeader, EmptyState, Icon, ProgressBar, Skeleton, Stat } from '@/components/ui'
 import { useClub } from '@/context/ClubContext'
 import { hasSupabase } from '@/lib/supabase'
 import { getClubSquad, type EnrichedPlayer } from '@/lib/supabase/workspace'
@@ -142,12 +142,14 @@ export default function ClubDashboard() {
               <div className="divide-y divide-ink-100">
                 {topRated.map(p => (
                   <Link key={p.id} to={`/club/player/${p.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-ink-50">
-                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-ink-900 text-2xs font-bold text-white">
-                      {p.position_primary}
-                    </div>
+                    <Avatar
+                      name={`${p.first_name} ${p.last_name}`}
+                      src={p.avatar_url ?? undefined}
+                      size={36}
+                    />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-bold">{p.first_name} {p.last_name}</p>
-                      <p className="text-2xs text-ink-500">{p.age} yrs · {p.score.ratingTier} · {p.confidence.label} confidence</p>
+                      <p className="text-2xs text-ink-500">{p.position_primary} · {p.age} yrs · {p.score.ratingTier} · {p.confidence.label} confidence</p>
                     </div>
                     <div className="text-right">
                       <p className="tnum font-display text-lg text-red-500">{p.score.current}</p>

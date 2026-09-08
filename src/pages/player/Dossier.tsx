@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Button, Icon, Skeleton } from '@/components/ui'
+import { Avatar, Button, Icon, Skeleton } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
 import { usePlayer } from '@/context/PlayerContext'
 import { FeatureGate, UpgradeCard } from '@/components/plan/FeatureGate'
@@ -128,14 +128,22 @@ export default function PlayerDossier() {
             {/* Header */}
             <div className="dossier bg-ink-950 p-6 text-white preserve-ink">
               <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-500">FutWeb</p>
-                  <p className="mt-2 font-display text-3xl leading-tight tracking-wide">
-                    {(player.first_name + ' ' + player.last_name).toUpperCase()}
-                  </p>
-                  <p className="mt-1 text-sm text-white/70">
-                    {player.position_primary} · {ageFromDob(player.dob)} years · {player.nationality}
-                  </p>
+                <div className="flex min-w-0 items-center gap-4">
+                  <Avatar
+                    name={`${player.first_name} ${player.last_name}`}
+                    src={player.avatar_url ?? undefined}
+                    size={84}
+                    ring="ring-2 ring-white/15"
+                  />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-500">FutWeb</p>
+                    <p className="mt-2 truncate font-display text-3xl leading-tight tracking-wide">
+                      {(player.first_name + ' ' + player.last_name).toUpperCase()}
+                    </p>
+                    <p className="mt-1 text-sm text-white/70">
+                      {player.position_primary} · {ageFromDob(player.dob)} years · {player.nationality}
+                    </p>
+                  </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div className="rounded-xl bg-white/10 px-3 py-2">

@@ -5,6 +5,8 @@ export interface PlayerProfileRow {
   user_id: string
   managed_by_club_id: string | null
   slug: string
+  /** Public CV headshot. The player row is RLS-protected with the CV itself. */
+  avatar_url: string | null
   first_name: string
   last_name: string
   dob: string
@@ -34,6 +36,81 @@ export interface PlayerProfileRow {
 function requireSupabase() {
   if (!supabase) throw new Error('Supabase is not configured')
   return supabase
+}
+
+/** The avatars bucket has the same 2 MB limit; validate before transferring. */
+export const PLAYER_PHOTO_MAX_BYTES = 2 * 1024 * 1024
+
+const PLAYER_PHOTO_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+])
+
+/**
+ * Upload the single headshot used across a player's CV.
+ *
+ * The object lives under the authenticated user's folder in the existing
+ * public `avatars` bucket. The database trigger in migration 0022 mirrors the
+ * URL from profiles.avatar_url to players.avatar_url, so club/admin reads are
+ * still governed by the existing player RLS policy.
+ */
+export async function uploadPlayerCvPhoto(
+  userId: string,
+  file: File,
+): Promise<PlayerProfileRow> {
+  const client = requireSupabase()
+
+  if (!PLAYER_PHOTO_TYPES.has(file.type)) {
+    throw new Error('Use a JPG, PNG or WebP image for your profile photo.')
+  }
+
+  if (file.size <= 0) {
+    throw new Error('Choose an image file to upload.')
+  }
+
+  if (file.size > PLAYER_PHOTO_MAX_BYTES) {
+    throw new Error('Profile photos must be 2 MB or smaller.')
+  }
+
+  // A stable filename keeps one current CV photo per player. The version query
+  // string below lets browsers immediately show a replacement despite CDN cache.
+  const storagePath = `${userId}/player-cv`
+
+  const { error: uploadError } = await client.storage
+    .from('avatars')
+    .upload(storagePath, file, {
+      cacheControl: '31536000',
+      upsert: true,
+      contentType: file.type,
+    })
+
+  if (uploadError) throw uploadError
+
+  const { data: publicUrlData } = client.storage
+    .from('avatars')
+    .getPublicUrl(storagePath)
+
+  const avatarUrl = `${publicUrlData.publicUrl}?v=${Date.now()}`
+
+  // The profile trigger performs the player-row sync and server-side active
+  // subscription check atomically with this update.
+  const { error: profileError } = await client
+    .from('profiles')
+    .update({ avatar_url: avatarUrl })
+    .eq('id', userId)
+
+  if (profileError) throw profileError
+
+  const { data, error } = await client
+    .from('players')
+    .select('*')
+    .eq('user_id', userId)
+    .single()
+
+  if (error) throw error
+
+  return data as PlayerProfileRow
 }
 
 export async function getMyPlayer(userId: string) {

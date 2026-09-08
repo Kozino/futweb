@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Button, Card, EmptyState, Icon, Input, Skeleton, toast } from '@/components/ui'
+import { Avatar, Badge, Button, Card, EmptyState, Icon, Input, Skeleton, toast } from '@/components/ui'
 import { UpgradeCard } from '@/components/plan/FeatureGate'
 import { AttributeRadar } from '@/components/player/Radar'
 import { useClub } from '@/context/ClubContext'
@@ -143,7 +143,12 @@ export default function Compare() {
                     <button key={p.id} type="button"
                       onClick={() => toggle(p)}
                       className="flex items-center justify-between gap-3 rounded-xl border border-ink-100 px-3 py-2.5 text-left transition-colors hover:border-ink-200 hover:bg-ink-50">
-                      <div className="min-w-0">
+                      <Avatar
+                        name={`${p.first_name} ${p.last_name}`}
+                        src={p.avatar_url ?? undefined}
+                        size={36}
+                      />
+                      <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-bold text-ink-800">
                           {p.first_name} {p.last_name}
                         </p>
@@ -204,8 +209,12 @@ function CompareGrid({ players }: { players: EnrichedPlayer[] }) {
           <div className="grid gap-2" style={{ gridTemplateColumns: `140px repeat(${players.length}, minmax(120px,1fr))` }}>
             {players.map(p => (
               <div key={p.id} className="rounded-xl bg-ink-50 p-3 text-center">
-                <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-ink-900 font-display text-sm text-white">
-                  {`${p.first_name[0] ?? ''}${p.last_name[0] ?? ''}`}
+                <div className="mx-auto w-fit">
+                  <Avatar
+                    name={`${p.first_name} ${p.last_name}`}
+                    src={p.avatar_url ?? undefined}
+                    size={48}
+                  />
                 </div>
                 <p className="mt-2 text-xs font-bold leading-tight text-ink-900">{p.first_name} {p.last_name}</p>
                 <p className="text-2xs text-ink-500">{p.position_primary} · {p.age} · {p.nationality}</p>

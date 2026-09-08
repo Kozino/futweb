@@ -77,6 +77,8 @@ export interface PlayerProfile {
   id: string
   user_id: string
   slug: string
+  /** Public headshot used on the player CV when visibility permits. */
+  avatar_url?: string | null
   first_name: string; last_name: string
   dob: string
   nationality: string; state_of_origin?: string

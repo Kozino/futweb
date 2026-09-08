@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Button, Card, EmptyState, Input, Select, Skeleton, toast } from '@/components/ui'
+import { Avatar, Badge, Button, Card, EmptyState, Input, Select, Skeleton, toast } from '@/components/ui'
 import { useClub } from '@/context/ClubContext'
 import { useAuth } from '@/context/AuthContext'
 import { hasSupabase, supabase } from '@/lib/supabase'
@@ -142,15 +142,19 @@ export default function Discovery() {
                 return (
                   <Card key={p.id} hover className="p-4">
                     <div className="flex items-start gap-3.5">
-                      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-ink-900 text-xs font-bold text-white">
-                        {p.position_primary}
-                      </div>
+                      <Avatar
+                        name={`${p.first_name} ${p.last_name}`}
+                        src={p.avatar_url ?? undefined}
+                        size={44}
+                        ring="ring-1 ring-ink-100"
+                      />
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <Link to={`/club/player/${p.id}`} className="truncate text-sm font-bold hover:underline">
                             {p.first_name} {p.last_name}
                           </Link>
+                          <Badge tone="neutral" size="sm">{p.position_primary}</Badge>
                           {p.is_minor && <Badge tone="blue" size="sm">U18</Badge>}
                           {p.availability === 'available' && <Badge tone="trust" size="sm">Available</Badge>}
                         </div>

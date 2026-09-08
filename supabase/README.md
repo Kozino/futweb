@@ -13,12 +13,11 @@ hands-on companion: how to run it, extend it, and not break it.
 
 ```
 supabase/
-├── migrations/                  Applied in order, 0001 → 0005. Never edit an
-│   ├── 0001_schema.sql          applied migration — write a new one.
-│   ├── 0002_rls.sql
-│   ├── 0003_functions.sql
-│   ├── 0004_seed_storage.sql
-│   └── 0005_public_directory.sql
+├── migrations/                  Applied in order. Never edit an applied
+│   ├── 0001_schema.sql          migration — write a new forward migration.
+│   ├── …
+│   ├── 0021_admin_subscription_actions.sql
+│   └── 0022_player_cv_photos_and_public_directory.sql
 └── functions/
     ├── _shared/
     │   ├── cors.ts               CORS headers + JSON response helper
@@ -37,7 +36,9 @@ supabase/
 | `0002_rls.sql` | Enables RLS on every table, the `security definer` helper functions (`is_admin`, `can_view_player`, `my_club_ids`, …) and every policy. Ends with the `grant` block — **policies filter rows, grants gate table access; both are required.** |
 | `0003_functions.sql` | Triggers (`updated_at`, append-only audit log, immutable payments/ratings, minor guardian gate, seat accounting hooks) and the privileged procedures: `handle_new_user`, `compute_trust_score`, `refresh_trust_and_tier`, `activate_subscription`. |
 | `0004_seed_storage.sql` | Plan catalogue seed, the 4 storage buckets + their policies, the `player_search` view, seat-limit enforcement trigger. |
-| `0005_public_directory.sql` | Anon-readable views (`public_player_profiles`, `public_clubs`, …) that back the marketing site's talent directory — a strict subset of columns, never raw contact or guardian data, never a minor's exact date of birth. |
+| `0005_real_player_onboarding.sql` | Secure `complete_player_onboarding` RPC for creating a player CV from the authenticated player's verified profile. |
+| `0006`–`0021` | Forward migrations for verification, club workflow, messaging, federation access, data rights and admin subscription operations. |
+| `0022_player_cv_photos_and_public_directory.sql` | Adds the subscription-aware CV headshot, mirrors it from `profiles` to RLS-protected `players`, and provides narrow anon-readable public directory/CV views. |
 
 Migrations are not idempotent by accident — they're idempotent by design
 (`create or replace`, `drop policy if exists`, `on conflict do nothing`), so
@@ -221,7 +222,7 @@ highest-leverage thing to add before this goes to production traffic.
   row either way, so this does not weaken the "client can't set its own
   price" guarantee.
 - **Exact date of birth removed from every public/anon-readable view**
-  (`public_player_profiles` in `0005_public_directory.sql`). Only the
+  (`public_player_profiles` in `0022_player_cv_photos_and_public_directory.sql`). Only the
   derived `age` is exposed publicly now; raw `dob` remains available to the
   player themself, their managing club, and admins through the ordinary
   RLS-protected `players` table. This closes a gap the existing minors

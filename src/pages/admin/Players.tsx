@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Button, Card, Input, Modal, Select, Skeleton, Textarea, toast } from '@/components/ui'
+import { Avatar, Badge, Button, Card, Input, Modal, Select, Skeleton, Textarea, toast } from '@/components/ui'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { ageFrom } from '@/lib/ratings'
@@ -17,6 +17,7 @@ interface PlayerRow {
   id: string; user_id: string; first_name: string; last_name: string; dob: string
   state_of_origin: string | null; position_primary: string; nationality: string
   managed_by_club_id: string | null; futweb_score: number | null
+  avatar_url: string | null
   confidence: number | null; visibility: string; is_minor: boolean
   created_at: string; updated_at: string
 }
@@ -118,9 +119,11 @@ export default function AdminPlayers() {
               <tr key={p.id} className="hover:bg-ink-50">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2.5">
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-red-500 to-red-700 text-2xs font-bold text-white">
-                      {p.first_name[0]}{p.last_name[0]}
-                    </span>
+                    <Avatar
+                      name={`${p.first_name} ${p.last_name}`}
+                      src={p.avatar_url ?? undefined}
+                      size={32}
+                    />
                     <span>
                       <span className="flex items-center gap-1.5 font-semibold">
                         {p.first_name} {p.last_name}
@@ -155,6 +158,25 @@ export default function AdminPlayers() {
 
         {detailLoading ? <Skeleton className="h-48 w-full" /> : (
           <div className="space-y-4">
+            {selected && (
+              <div className="flex items-center gap-3 rounded-xl border border-ink-100 bg-ink-50/60 p-3">
+                <Avatar
+                  name={`${selected.first_name} ${selected.last_name}`}
+                  src={selected.avatar_url ?? undefined}
+                  size={56}
+                  ring="ring-2 ring-white shadow-sm"
+                />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-ink-900">
+                    {selected.first_name} {selected.last_name}
+                  </p>
+                  <p className="text-xs text-ink-500">
+                    {selected.position_primary} · {selected.nationality}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {profile?.suspended_at && (
               <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
                 <strong>Suspended</strong> since {new Date(profile.suspended_at).toLocaleString()}

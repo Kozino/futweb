@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import { Badge, Button, Card, EmptyState, Input, Select } from '@/components/ui'
+import { Avatar, Badge, Button, Card, EmptyState, Input, Select } from '@/components/ui'
 import { DEMO_CLUBS, DEMO_PLAYERS, enrichPlayer } from '@/data/mock'
 import { LEAGUES } from '@/lib/constants'
 import { POSITION_LIST } from '@/lib/ratings'
@@ -128,7 +128,12 @@ export default function TalentDirectory() {
               {playerResults.map(p => (
                 <Card key={p.id} hover className="overflow-hidden">
                   <div className="flex gap-4 p-4 sm:p-5">
-                    <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-ink-900 to-red-900 text-lg font-extrabold text-white">{p.first_name[0]}{p.last_name[0]}</div>
+                    <Avatar
+                      name={`${p.first_name} ${p.last_name}`}
+                      src={p.avatar_url ?? undefined}
+                      size={64}
+                      ring="ring-2 ring-ink-100"
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <Link to={`/players/${p.slug}`} className="text-base font-extrabold hover:text-red-600">{p.first_name} {p.last_name}</Link>

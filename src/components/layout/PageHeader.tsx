@@ -1,8 +1,17 @@
 import type { ReactNode } from 'react'
-import { Icon, type IconName } from '@/components/ui'
+import { Avatar, Icon, type IconName } from '@/components/ui'
 
-export function PageHeader({ title, subtitle, actions, icon, breadcrumb }:
-  { title: string; subtitle?: string; actions?: ReactNode; icon?: IconName; breadcrumb?: string }) {
+export function PageHeader({ title, subtitle, actions, icon, breadcrumb, avatarName, avatarUrl }:
+  {
+    title: string
+    subtitle?: string
+    actions?: ReactNode
+    icon?: IconName
+    breadcrumb?: string
+    /** Optional person portrait for detail pages; falls back to initials safely. */
+    avatarName?: string
+    avatarUrl?: string
+  }) {
   return (
     <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
@@ -10,11 +19,18 @@ export function PageHeader({ title, subtitle, actions, icon, breadcrumb }:
           <p className="mb-1 text-2xs font-bold uppercase tracking-widest text-ink-400">{breadcrumb}</p>
         )}
         <div className="flex items-center gap-2.5">
-          {icon && (
+          {avatarName ? (
+            <Avatar
+              name={avatarName}
+              src={avatarUrl}
+              size={40}
+              ring="ring-2 ring-ink-100"
+            />
+          ) : icon ? (
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ink-900 text-white">
               <Icon name={icon} size={17} />
             </span>
-          )}
+          ) : null}
           <h1 className="truncate text-xl font-extrabold tracking-tight text-ink-900 sm:text-2xl">{title}</h1>
         </div>
         {subtitle && <p className="mt-1 text-sm text-ink-500">{subtitle}</p>}

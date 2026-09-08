@@ -118,7 +118,11 @@ export default function PlayerDetail() {
         <Icon name="chevron-left" size={14} />Back to discovery
       </Link>
 
-      <PageHeader breadcrumb="Player profile" title={`${player.first_name} ${player.last_name}`}
+      <PageHeader
+        breadcrumb="Player profile"
+        title={`${player.first_name} ${player.last_name}`}
+        avatarName={`${player.first_name} ${player.last_name}`}
+        avatarUrl={player.avatar_url ?? undefined}
         subtitle={`${player.position_primary} · ${player.age} yrs · ${player.clubName ?? 'Unattached'} · ${player.state_of_origin ?? '—'}`}
         actions={<>
           {club && (

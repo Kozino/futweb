@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Button, Card, EmptyState, Skeleton, Tabs, toast } from '@/components/ui'
+import { Avatar, Badge, Button, Card, EmptyState, Skeleton, Tabs, toast } from '@/components/ui'
 import { useClub } from '@/context/ClubContext'
 import { hasSupabase, supabase } from '@/lib/supabase'
 import { enrichPlayers, type EnrichedPlayer } from '@/lib/supabase/workspace'
@@ -102,14 +102,18 @@ export default function Shortlists() {
                 return (
                   <Card key={id} hover className="p-4">
                     <div className="flex items-start gap-3.5">
-                      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-ink-900 text-xs font-bold text-white">
-                        {player.position_primary}
-                      </div>
+                      <Avatar
+                        name={`${player.first_name} ${player.last_name}`}
+                        src={player.avatar_url ?? undefined}
+                        size={44}
+                        ring="ring-1 ring-ink-100"
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <Link to={`/club/player/${player.id}`} className="truncate text-sm font-bold hover:underline">
                             {player.first_name} {player.last_name}
                           </Link>
+                          <Badge tone="neutral" size="sm">{player.position_primary}</Badge>
                           <Badge tone={STAGE_TONE[st]} size="sm">{st.replace('_', ' ')}</Badge>
                         </div>
                         <p className="mt-0.5 truncate text-xs text-ink-500">
