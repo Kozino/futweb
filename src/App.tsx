@@ -53,6 +53,7 @@ import FederationApply from '@/pages/FederationApply'
 import Academies from '@/pages/club/Academies'
 import Integrations from '@/pages/club/Integrations'
 import EnterpriseRequests from '@/pages/admin/EnterpriseRequests'
+import ContactMessages from '@/pages/admin/ContactMessages'
 
 /* Club */
 import ClubDashboard from '@/pages/club/Dashboard'
@@ -1406,6 +1407,17 @@ export default function App() {
               <RequireAuth>
                 <RequireRole role="admin">
                   <EnterpriseRequests />
+                </RequireRole>
+              </RequireAuth>
+            }
+          />
+
+          <Route
+            path="/admin/contact"
+            element={
+              <RequireAuth>
+                <RequireRole role="admin">
+                  <ContactMessages />
                 </RequireRole>
               </RequireAuth>
             }
