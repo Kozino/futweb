@@ -1,10 +1,38 @@
 import { useState } from 'react'
 import { Button, Card, Input, Select, Textarea, toast } from '@/components/ui'
 import { Icon } from '@/components/ui'
+import { submitContactMessage, type ContactTopic } from '@/lib/supabase/contact'
 
 export default function Contact() {
   const [sent, setSent] = useState(false)
-  const [topic, setTopic] = useState('sales')
+  const [busy, setBusy] = useState(false)
+  const [fullName, setFullName] = useState('')
+  const [email, setEmail] = useState('')
+  const [topic, setTopic] = useState<ContactTopic>('sales')
+  const [organisation, setOrganisation] = useState('')
+  const [message, setMessage] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!fullName.trim() || !email.trim() || !message.trim()) {
+      toast({ tone: 'error', title: 'Missing details', description: 'Fill in your name, email and message.' })
+      return
+    }
+    setBusy(true)
+    try {
+      await submitContactMessage({ fullName, email, topic, organisation, message })
+      setSent(true)
+      toast({ tone: 'success', title: 'Message sent' })
+    } catch (err) {
+      toast({
+        tone: 'error',
+        title: 'Could not send your message',
+        description: err instanceof Error ? err.message : 'Please try again in a moment.',
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
 
   if (sent) {
     return (
@@ -18,7 +46,9 @@ export default function Contact() {
             We reply to every message within one working day. Urgent trust and safety matters are
             reviewed same-day.
           </p>
-          <Button className="mt-6" variant="outline" onClick={() => setSent(false)}>Send another</Button>
+          <Button className="mt-6" variant="outline" onClick={() => {
+            setSent(false); setFullName(''); setEmail(''); setOrganisation(''); setMessage(''); setTopic('sales')
+          }}>Send another</Button>
         </Card>
       </div>
     )
@@ -39,22 +69,28 @@ export default function Contact() {
 
       <section className="fw-container grid gap-6 py-12 lg:grid-cols-[1.4fr_1fr]">
         <Card className="p-6">
-          <form onSubmit={e => { e.preventDefault(); setSent(true); toast({ tone: 'success', title: 'Message sent' }) }}>
+          <form onSubmit={handleSubmit}>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Input label="Full name" required placeholder="Chidi Okonkwo" />
-              <Input label="Email" type="email" required placeholder="you@example.com" icon="mail" />
-              <Select label="What is this about?" value={topic} onChange={e => setTopic(e.target.value)} options={[
+              <Input label="Full name" required placeholder="Chidi Okonkwo"
+                value={fullName} onChange={e => setFullName(e.target.value)} />
+              <Input label="Email" type="email" required placeholder="you@example.com" icon="mail"
+                value={email} onChange={e => setEmail(e.target.value)} />
+              <Select label="What is this about?" value={topic} onChange={e => setTopic(e.target.value as ContactTopic)} options={[
                 { value: 'sales', label: 'Club onboarding & pricing' },
                 { value: 'player', label: 'Player account help' },
                 { value: 'trust', label: 'Trust & safety concern' },
                 { value: 'press', label: 'Press & partnerships' },
                 { value: 'other', label: 'Something else' },
               ]} />
-              <Input label="Organisation" placeholder="Club or academy name" icon="building" />
+              <Input label="Organisation" placeholder="Club or academy name" icon="building"
+                value={organisation} onChange={e => setOrganisation(e.target.value)} />
             </div>
             <Textarea className="mt-4" label="Message" required maxChars={1000}
-              placeholder="Tell us what you need — squads, trials, verification, anything." />
-            <Button type="submit" className="mt-5" size="lg" iconRight="arrow-right">Send message</Button>
+              placeholder="Tell us what you need — squads, trials, verification, anything."
+              value={message} onChange={e => setMessage(e.target.value)} />
+            <Button type="submit" className="mt-5" size="lg" iconRight="arrow-right" disabled={busy}>
+              {busy ? 'Sending…' : 'Send message'}
+            </Button>
           </form>
         </Card>
 
